@@ -85,6 +85,7 @@ func (cm *MemoryManager) RecallContext() llms.MessageContent {
 
 func (cm *MemoryManager) Update(msg llms.MessageContent) error {
 	cm.mainContext.Messages = append(cm.mainContext.Messages, msg)
+
 	if msg.Role == llms.ChatMessageTypeHuman {
 		chatMsg := llms.HumanChatMessage{
 			Content: msg.Parts[0].(llms.TextContent).String(),
@@ -110,32 +111,50 @@ func (cm *MemoryManager) Update(msg llms.MessageContent) error {
 	chatHistorySize := cm.tokenEncoder.Encode(chatHistory, nil, nil)
 	if len(chatHistorySize) >= cm.historySize {
 		// flush chat history messages
+		msgTmplt := prompts.PromptTemplate{
+			Template:       cm.mainContext.SystemInstructions["memoryPressure:ChatHistory"],
+			TemplateFormat: prompts.TemplateFormatGoTemplate,
+			InputVariables: []string{},
+			PartialVariables: map[string]any{
+				"chatHistory": chatHistory,
+			},
+		}
 
+		msg, err := msgTmplt.Format(map[string]any{})
+		if err != nil {
+			log.Printf("Error formatting prompt: %v", err)
+			return err
+		}
+
+		sysMsg := llms.TextParts(llms.ChatMessageTypeSystem, msg)
+
+		cm.processor.Input(sysMsg)
 	}
 
-	// Main message processing pipeline
-	// 1. Queue management
-	// 2. Context window management
-	// 3. LLM processing
-	// 4. Function execution
-	// 5. Memory updates
+	workingContextSize := cm.tokenEncoder.Encode(cm.mainContext.WorkingContext, nil, nil)
+	if len(workingContextSize) >= cm.workingCtxSize {
+		// flush working context
+		msgTmplt := prompts.PromptTemplate{
+			Template:       cm.mainContext.SystemInstructions["memoryPressure:WorkingContext"],
+			TemplateFormat: prompts.TemplateFormatGoTemplate,
+			InputVariables: []string{},
+			PartialVariables: map[string]any{
+				"workingContext": cm.mainContext.WorkingContext,
+			},
+		}
+
+		msg, err := msgTmplt.Format(map[string]any{})
+		if err != nil {
+			log.Printf("Error formatting prompt: %v", err)
+			return err
+		}
+
+		sysMsg := llms.TextParts(llms.ChatMessageTypeSystem, msg)
+
+		cm.processor.Input(sysMsg)
+	}
+
+	cm.processor.Input(msg)
 
 	return nil
-}
-
-func (cm *MemoryManager) FlushMessages() error {
-	// Implement memory pressure handling
-	// - Check context window usage
-	// - Trigger eviction if needed
-	// - Update working context
-
-	return nil
-}
-
-func (cm *MemoryManager) GetWorkingContextSize() int {
-	return 0
-}
-
-func (cm *MemoryManager) GetMsgsSize() int {
-	return 0
 }
