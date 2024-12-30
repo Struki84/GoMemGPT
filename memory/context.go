@@ -52,6 +52,19 @@ type MemoryContext struct {
 	Storage MemoryStorage
 }
 
+// MemoryContext can be viewd as state, or core memory with
+// perisistance through a db of any kind,
+
+// The MemoryContext needs to be able to load previous conversations
+// internal messages, and context into it's state by rebuilding it
+// more persisttance storage and archival storage.
+
+// When chat history queue is full, the oldest messages are evicted
+// from the queue and summerized into current working context.
+
+// core memory - fixed size memory context with its state saved in persistance storage db
+// archive memory - unlimited size db storage for all messages and contexts
+
 func NewMemoryContext(storage MemoryStorage) *MemoryContext {
 	return &MemoryContext{
 		Storage: storage,
@@ -61,16 +74,52 @@ func NewMemoryContext(storage MemoryStorage) *MemoryContext {
 	}
 }
 
-// Add new messages to core memory
-func (memory *MemoryContext) SaveMessages() error {
+// Load all the messages and context from core memory
+func (memory *MemoryContext) Load() error {
 	return nil
 }
 
-func (memory *MemoryContext) LoadMessages() ([]llms.MessageContent, error) {
-	return []llms.MessageContent{}, nil
+// Save current moemory context state to core memory
+func (memory *MemoryContext) Save() error {
+	return nil
 }
 
-func (memory *MemoryContext) Memorize() {}
-func (memory *MemoryContext) Recall()   {}
-func (memory *MemoryContext) Reflect()  {}
-func (memory *MemoryContext) Compress() {}
+// Summarize or compress memories into working context or historical context
+// to save space
+func (memory *MemoryContext) Compress(workingContextSummary, historicalContextSummary string) error {
+	// inputs are working and historical Summary generated
+	// by llm, based on chat history and messsages
+
+	// updates memory.WorkingContext and memory.HistoricalContext
+
+	// saves the memory context state to core memory
+	return nil
+}
+
+// Move infromation from core memory to archive memory
+func (memory *MemoryContext) Memorize(summary string) error {
+	// can happen when chat history is full
+	// save chat history msgs to archive storage
+	// removes overflowing messages in chat history
+	// saves the new summary to core memory and archive memory
+	// input should be the summary of the flushed chat history messages
+
+	return nil
+}
+
+// Generate internal thoughts about the context
+func (memory *MemoryContext) Reflect(summary string) error {
+	// can happen when messages is full
+	// save messages to archive storage
+	// removes overflowing messages in messages
+	// saves the new summary to core memory and archive memory
+	// input should be the summary of the flushed messages
+
+	return nil
+}
+
+// Recall information from archive storage
+func (memory *MemoryContext) Recall() {
+	// use similarity search to recal information from archive storage
+	// input will be tbd
+}

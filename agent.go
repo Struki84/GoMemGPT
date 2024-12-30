@@ -11,6 +11,7 @@ import (
 )
 
 func Agent(input string) {
+	ctx := context.Background()
 
 	llm, err := openai.New(
 		openai.WithModel("gpt-4o"),
@@ -19,15 +20,10 @@ func Agent(input string) {
 		log.Printf("Error initializing LLM: %v", err)
 	}
 
-	ctx := context.Background()
-
 	memory := memory.NewMemoryManager(llm, nil)
-
 	msgs := make([]llms.MessageContent, 0)
-	msgs = append(msgs, memory.RecallContext())
 
 	userMsg := llms.TextParts(llms.ChatMessageTypeHuman, input)
-	msgs = append(msgs, userMsg)
 
 	err = memory.Update(userMsg)
 	if err != nil {
@@ -38,6 +34,9 @@ func Agent(input string) {
 		fmt.Println(string(chunk))
 		return nil
 	}
+
+	msgs = append(msgs, memory.RecallContext())
+	msgs = append(msgs, userMsg)
 
 	response, err := llm.GenerateContent(ctx, msgs, llms.WithStreamingFunc(stream))
 	if err != nil {
