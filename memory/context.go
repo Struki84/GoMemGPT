@@ -1,6 +1,10 @@
 package memory
 
-import "github.com/tmc/langchaingo/llms"
+import (
+	"encoding/json"
+
+	"github.com/tmc/langchaingo/llms"
+)
 
 var (
 	PrimerTemplate = `
@@ -17,9 +21,79 @@ var (
 	Your conversation history with the user is as follows:
 	{{.conversationHistory}}
 	`
+
+	MemoryPressureWorkingContext = `
+	{{.time}}
+	
+	Memory pressure warning: WorkingContext
+	
+	Working context:
+	{{.workingContext}}
+
+	Working context size: {{.workingContextSize}}
+	`
+
+	MemoryPressureHistoricalContext = `
+	{{.time}}
+	
+	Memory pressure warning: HistoricalContext
+	
+	Historical context:
+	{{.historicalContext}}
+
+	Working context size: {{.historicalContextSize}}
+	`
+
+	MemoryPressureChatHistory = `
+	{{.time}}
+	
+	Memory pressure warning: ChatHistory
+	
+	Historical context:
+	{{.historicalContext}}
+
+	Working context size: {{.historicalContextSize}}
+	`
+
+	MemoryPressureMessages = `
+	{{.time}}
+	
+	Memory pressure warning: Messages
+	
+	Messages in context:
+	{{.messages}}
+
+	Messages size: {{.messagesSize}}
+	`
 )
 
 type MemoryStorage interface {
+	LoadMessages() ([]llms.MessageContent, error)
+	SaveMessages(messages []llms.MessageContent) error
+
+	LoadChatHistory() ([]llms.ChatMessage, error)
+	SaveChatHistory(chatHistory []llms.ChatMessage) error
+
+	LoadWorkingContext() (string, error)
+	SaveWorkingContext(workingContext string) error
+
+	LoadHistoricalContext() (string, error)
+	SaveHistoricalContext(historicalContext string) error
+
+	RecallMessages() ([]llms.MessageContent, error)
+	ArchiveMessages(messages []llms.MessageContent) error
+
+	RecallChatHistory() ([]llms.ChatMessage, error)
+	ArchiveChatHistory(chatHistory []llms.ChatMessage) error
+
+	RecallWorkingContext() (string, error)
+	ArchiveWorkingContext(workingContext string) error
+
+	RecallHistoricalContext() (string, error)
+	ArchiveHistoricalContext(historicalContext string) error
+
+	SearchMessagesArchives(query string) ([]llms.MessageContent, error)
+	SearchChatHistoryArchives(query string) ([]llms.ChatMessage, error)
 }
 
 // Main context
@@ -69,57 +143,253 @@ func NewMemoryContext(storage MemoryStorage) *MemoryContext {
 	return &MemoryContext{
 		Storage: storage,
 		SystemInstructions: map[string]string{
-			"assistant": PrimerTemplate,
+			"assistant":                        PrimerTemplate,
+			"memoryPressure:WorkingContext":    MemoryPressureWorkingContext,
+			"memoryPressure:HistoricalContext": MemoryPressureHistoricalContext,
+			"memoryPressure:ChatHistory":       MemoryPressureChatHistory,
+			"memoryPressure:Messages":          MemoryPressureMessages,
 		},
 	}
 }
 
 // Load all the messages and context from core memory
 func (memory *MemoryContext) Load() error {
+	msgs, err := memory.Storage.LoadMessages()
+	if err != nil {
+		return err
+	}
+
+	chatHistory, err := memory.Storage.LoadChatHistory()
+	if err != nil {
+		return err
+	}
+
+	workingContext, err := memory.Storage.LoadWorkingContext()
+	if err != nil {
+		return err
+	}
+
+	historicalContext, err := memory.Storage.LoadHistoricalContext()
+	if err != nil {
+		return err
+	}
+
+	memory.Messages = msgs
+	memory.ChatHistory = chatHistory
+	memory.WorkingContext = workingContext
+	memory.HistoricalContext = historicalContext
+
 	return nil
 }
 
 // Save current moemory context state to core memory
 func (memory *MemoryContext) Save() error {
+
+	err := memory.Storage.SaveMessages(memory.Messages)
+	if err != nil {
+		return err
+	}
+
+	err = memory.Storage.SaveChatHistory(memory.ChatHistory)
+	if err != nil {
+		return err
+	}
+
+	err = memory.Storage.SaveWorkingContext(memory.WorkingContext)
+	if err != nil {
+		return err
+	}
+
+	err = memory.Storage.SaveHistoricalContext(memory.HistoricalContext)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // Summarize or compress memories into working context or historical context
 // to save space
-func (memory *MemoryContext) Compress(workingContextSummary, historicalContextSummary string) error {
+func (memory *MemoryContext) Compress(args string) error {
 	// inputs are working and historical Summary generated
 	// by llm, based on chat history and messsages
-
 	// updates memory.WorkingContext and memory.HistoricalContext
-
 	// saves the memory context state to core memory
+
+	var input struct {
+		WorkingContextSummary    string `json:"workingContextSummary"`
+		HistoricalContextSummary string `json:"historicalContextSummary"`
+	}
+
+	err := json.Unmarshal([]byte(args), &input)
+	if err != nil {
+		return err
+	}
+
+	memory.WorkingContext = input.WorkingContextSummary
+	memory.HistoricalContext = input.HistoricalContextSummary
+
+	err = memory.Storage.SaveWorkingContext(memory.WorkingContext)
+	if err != nil {
+		return err
+	}
+
+	err = memory.Storage.SaveHistoricalContext(memory.HistoricalContext)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // Move infromation from core memory to archive memory
-func (memory *MemoryContext) Memorize(summary string) error {
+func (memory *MemoryContext) Memorize(args string) error {
 	// can happen when chat history is full
 	// save chat history msgs to archive storage
 	// removes overflowing messages in chat history
 	// saves the new summary to core memory and archive memory
 	// input should be the summary of the flushed chat history messages
 
+	var input struct {
+		Summary string `json:"summary"`
+	}
+
+	err := json.Unmarshal([]byte(args), &input)
+	if err != nil {
+		return err
+	}
+
+	err = memory.FlushMessages()
+	if err != nil {
+		return err
+	}
+
+	memory.WorkingContext = input.Summary
+
+	err = memory.Storage.SaveWorkingContext(memory.WorkingContext)
+	if err != nil {
+		return err
+	}
+
+	err = memory.Storage.ArchiveWorkingContext(memory.WorkingContext)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // Generate internal thoughts about the context
-func (memory *MemoryContext) Reflect(summary string) error {
+func (memory *MemoryContext) Reflect(args string) error {
 	// can happen when messages is full
 	// save messages to archive storage
 	// removes overflowing messages in messages
 	// saves the new summary to core memory and archive memory
 	// input should be the summary of the flushed messages
 
+	var input struct {
+		Summary string `json:"summary"`
+	}
+
+	err := json.Unmarshal([]byte(args), &input)
+	if err != nil {
+		return err
+	}
+
+	err = memory.FlushMessages()
+	if err != nil {
+		return err
+	}
+
+	memory.HistoricalContext = input.Summary
+
+	err = memory.Storage.SaveHistoricalContext(memory.HistoricalContext)
+	if err != nil {
+		return err
+	}
+
+	err = memory.Storage.ArchiveHistoricalContext(memory.HistoricalContext)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (memory *MemoryContext) Archive() error {
+	err := memory.Storage.ArchiveWorkingContext(memory.WorkingContext)
+	if err != nil {
+		return err
+	}
+
+	err = memory.Storage.ArchiveHistoricalContext(memory.HistoricalContext)
+	if err != nil {
+		return err
+	}
+
+	err = memory.Storage.ArchiveChatHistory(memory.ChatHistory)
+	if err != nil {
+		return err
+	}
+
+	err = memory.Storage.ArchiveMessages(memory.Messages)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // Recall information from archive storage
-func (memory *MemoryContext) Recall() {
-	// use similarity search to recal information from archive storage
+func (memory *MemoryContext) Recall() error {
+	workingContext, err := memory.Storage.RecallWorkingContext()
+	if err != nil {
+		return err
+	}
+
+	historicalContext, err := memory.Storage.RecallHistoricalContext()
+	if err != nil {
+		return err
+	}
+
+	msgs, err := memory.Storage.RecallMessages()
+	if err != nil {
+		return err
+	}
+
+	chatHistory, err := memory.Storage.RecallChatHistory()
+	if err != nil {
+		return err
+	}
+
+	memory.Messages = msgs
+	memory.ChatHistory = chatHistory
+	memory.WorkingContext = workingContext
+	memory.HistoricalContext = historicalContext
+
+	return nil
+}
+
+func (memory *MemoryContext) Search() error {
+	// use similarity search to recall information from archive storage
 	// input will be tbd
+
+	return nil
+}
+
+func (memory *MemoryContext) FlushMessages() error {
+	// while the token size of all messages in buffer
+	// is equal or greater than the max token size  minus the current input msg(?)
+	// keep removing messages from messages buffer
+
+	return nil
+
+}
+
+func (memory *MemoryContext) FlushChatHistory() error {
+	// while the token size of all chat history messages in buffer
+	// is equal or greater than the max token size  minus the last input msg(?)
+	// keep removing messages from chat history buffer
+
+	return nil
 }

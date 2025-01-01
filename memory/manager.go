@@ -20,15 +20,15 @@ var (
 type MemoryManager struct {
 	processor      *LLMProcessor
 	mainContext    *MemoryContext
+	tokenEncoder   *tiktoken.Tiktoken
 	maxContextSize int
 	workingCtxSize int
 	historySize    int
-	tokenEncoder   *tiktoken.Tiktoken
 }
 
 func NewMemoryManager(llm llms.Model, storage MemoryStorage) *MemoryManager {
-
 	mainContext := NewMemoryContext(storage)
+
 	encoder, err := tiktoken.EncodingForModel("gpt-4o")
 	if err != nil {
 		log.Printf("Error initializing encoding: %v", err)
@@ -39,6 +39,7 @@ func NewMemoryManager(llm llms.Model, storage MemoryStorage) *MemoryManager {
 	maxContextSize := DefaultContextSize - len(primerSize)
 
 	proc := NewLLMProcessor(llm, &MemoryContext{})
+
 	go proc.Run()
 
 	return &MemoryManager{
