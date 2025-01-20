@@ -92,7 +92,7 @@ type MemoryStorage interface {
 	RecallHistoricalContext() (string, error)
 	ArchiveHistoricalContext(historicalContext string) error
 
-	SearchMessagesArchives(query string) ([]llms.MessageContent, error)
+	SearchMesssgesArchives(query string) ([]llms.MessageContent, error)
 	SearchChatHistoryArchives(query string) ([]llms.ChatMessage, error)
 }
 
@@ -182,7 +182,7 @@ func (memory *MemoryContext) Load() error {
 	return nil
 }
 
-// Save current moemory context state to core memory
+// Save current memory context state to core memory
 func (memory *MemoryContext) Save() error {
 
 	err := memory.Storage.SaveMessages(memory.Messages)

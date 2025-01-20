@@ -84,36 +84,33 @@ func (cm *MemoryManager) RecallContext() llms.MessageContent {
 	return llms.TextParts(llms.ChatMessageTypeSystem, prompt)
 }
 
-func (cm *MemoryManager) Update(msg llms.MessageContent) error {
-	cm.mainContext.Messages = append(cm.mainContext.Messages, msg)
+func (manager *MemoryManager) Input(msg llms.MessageContent) {
+	manager.processor.Input(msg)
+}
 
-	if msg.Role == llms.ChatMessageTypeHuman {
-		chatMsg := llms.HumanChatMessage{
-			Content: msg.Parts[0].(llms.TextContent).String(),
-		}
+func (manager *MemoryManager) Output(fn func(llms.MessageContent)) {
+	manager.processor.Output(fn)
+}
 
-		cm.mainContext.ChatHistory = append(cm.mainContext.ChatHistory, chatMsg)
-	}
+func (manager *MemoryManager) Update(userMsg, AIMsg llms.MessageContent) error {
+	manager.mainContext.Messages = append(manager.mainContext.Messages, userMsg)
+	manager.mainContext.Messages = append(manager.mainContext.Messages, AIMsg)
 
-	if msg.Role == llms.ChatMessageTypeAI {
-		chatMsg := llms.AIChatMessage{
-			Content: msg.Parts[0].(llms.TextContent).String(),
-		}
+	manager.SaveChatHistory(userMsg)
+	manager.SaveChatHistory(AIMsg)
 
-		cm.mainContext.ChatHistory = append(cm.mainContext.ChatHistory, chatMsg)
-	}
-
-	chatHistory, err := llms.GetBufferString(cm.mainContext.ChatHistory, "User: ", "AI: ")
+	// Check memory pressure
+	chatHistory, err := llms.GetBufferString(manager.mainContext.ChatHistory, "User: ", "AI: ")
 	if err != nil {
 		log.Printf("Error loading chat history: %v", err)
 		return err
 	}
 
-	chatHistorySize := cm.tokenEncoder.Encode(chatHistory, nil, nil)
-	if len(chatHistorySize) >= cm.historySize {
+	chatHistorySize := manager.tokenEncoder.Encode(chatHistory, nil, nil)
+	if len(chatHistorySize) >= manager.historySize {
 		// flush chat history messages
-		msgTmplt := prompts.PromptTemplate{
-			Template:       cm.mainContext.SystemInstructions["memoryPressure:ChatHistory"],
+		template := prompts.PromptTemplate{
+			Template:       manager.mainContext.SystemInstructions["memoryPressure:ChatHistory"],
 			TemplateFormat: prompts.TemplateFormatGoTemplate,
 			InputVariables: []string{},
 			PartialVariables: map[string]any{
@@ -121,41 +118,57 @@ func (cm *MemoryManager) Update(msg llms.MessageContent) error {
 			},
 		}
 
-		msg, err := msgTmplt.Format(map[string]any{})
+		msgTmplt, err := template.Format(map[string]any{})
 		if err != nil {
 			log.Printf("Error formatting prompt: %v", err)
 			return err
 		}
 
-		sysMsg := llms.TextParts(llms.ChatMessageTypeSystem, msg)
+		sysMsg := llms.TextParts(llms.ChatMessageTypeSystem, msgTmplt)
 
-		cm.processor.Input(sysMsg)
+		manager.processor.Input(sysMsg)
 	}
 
-	workingContextSize := cm.tokenEncoder.Encode(cm.mainContext.WorkingContext, nil, nil)
-	if len(workingContextSize) >= cm.workingCtxSize {
+	workingContextSize := manager.tokenEncoder.Encode(manager.mainContext.WorkingContext, nil, nil)
+	if len(workingContextSize) >= manager.workingCtxSize {
 		// flush working context
-		msgTmplt := prompts.PromptTemplate{
-			Template:       cm.mainContext.SystemInstructions["memoryPressure:WorkingContext"],
+		template := prompts.PromptTemplate{
+			Template:       manager.mainContext.SystemInstructions["memoryPressure:WorkingContext"],
 			TemplateFormat: prompts.TemplateFormatGoTemplate,
 			InputVariables: []string{},
 			PartialVariables: map[string]any{
-				"workingContext": cm.mainContext.WorkingContext,
+				"workingContext": manager.mainContext.WorkingContext,
 			},
 		}
 
-		msg, err := msgTmplt.Format(map[string]any{})
+		msgTmplt, err := template.Format(map[string]any{})
 		if err != nil {
 			log.Printf("Error formatting prompt: %v", err)
 			return err
 		}
 
-		sysMsg := llms.TextParts(llms.ChatMessageTypeSystem, msg)
+		sysMsg := llms.TextParts(llms.ChatMessageTypeSystem, msgTmplt)
 
-		cm.processor.Input(sysMsg)
+		manager.processor.Input(sysMsg)
 	}
 
-	cm.processor.Input(msg)
-
 	return nil
+}
+
+func (manager *MemoryManager) SaveChatHistory(msg llms.MessageContent) {
+	if msg.Role == llms.ChatMessageTypeHuman {
+		chatMsg := llms.HumanChatMessage{
+			Content: msg.Parts[0].(llms.TextContent).String(),
+		}
+
+		manager.mainContext.ChatHistory = append(manager.mainContext.ChatHistory, chatMsg)
+	}
+
+	if msg.Role == llms.ChatMessageTypeAI {
+		chatMsg := llms.AIChatMessage{
+			Content: msg.Parts[0].(llms.TextContent).String(),
+		}
+
+		manager.mainContext.ChatHistory = append(manager.mainContext.ChatHistory, chatMsg)
+	}
 }

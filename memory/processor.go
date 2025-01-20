@@ -38,7 +38,6 @@ func (processor *LLMProcessor) Run() {
 	for msg := range processor.mainProc {
 		switch msg.Role {
 		case llms.ChatMessageTypeSystem, llms.ChatMessageTypeFunction:
-
 			response, _ := processor.llm.GenerateContent(
 				ctx,
 				processor.mainContext.Messages,
@@ -54,7 +53,7 @@ func (processor *LLMProcessor) Run() {
 			}
 
 			processor.mainContext.Messages = append(processor.mainContext.Messages, newMsg)
-			processor.mainProc <- msg
+			processor.mainProc <- newMsg
 		case llms.ChatMessageTypeAI:
 			for _, part := range msg.Parts {
 
@@ -64,12 +63,12 @@ func (processor *LLMProcessor) Run() {
 						newMsg := llms.TextParts(llms.ChatMessageTypeFunction, fmt.Sprintf("Error running function: %v", err))
 
 						processor.mainContext.Messages = append(processor.mainContext.Messages, newMsg)
-						processor.mainProc <- msg
+						processor.mainProc <- newMsg
 					}
 
 					newMsg := llms.TextParts(llms.ChatMessageTypeFunction, executionResult)
 					processor.mainContext.Messages = append(processor.mainContext.Messages, newMsg)
-					processor.mainProc <- msg
+					processor.mainProc <- newMsg
 
 				} else {
 					processor.output(msg)

@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/Struki84/GoMemGPT/memory"
+	"github.com/Struki84/GoMemGPT/memory/storage"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/openai"
 )
@@ -20,23 +21,46 @@ func Agent(input string) {
 		log.Printf("Error initializing LLM: %v", err)
 	}
 
-	memory := memory.NewMemoryManager(llm, nil)
-	msgs := make([]llms.MessageContent, 0)
+	sqlStorage := storage.NewSqliteStorage()
 
+	memory := memory.NewMemoryManager(llm, sqlStorage)
 	userMsg := llms.TextParts(llms.ChatMessageTypeHuman, input)
 
-	err = memory.Update(userMsg)
-	if err != nil {
-		log.Printf("Error updating memory: %v", err)
-	}
+	msgs := make([]llms.MessageContent, 0)
+	msgs = append(msgs, memory.RecallContext())
+	msgs = append(msgs, userMsg)
+
+	// err = memory.Update(userMsg)
+	// if err != nil {
+	// 	log.Printf("Error updating memory: %v", err)
+	// }
+
+	// memory.Output(func(msg llms.MessageContent) {
+	// 	stream := func(ctx context.Context, chunk []byte) error {
+	// 		fmt.Println(string(chunk))
+	// 		return nil
+	// 	}
+	//
+	// 	msgs = append(msgs, memory.RecallContext())
+	// 	msgs = append(msgs, userMsg)
+	//
+	// 	response, err := llm.GenerateContent(ctx, msgs, llms.WithStreamingFunc(stream))
+	// 	if err != nil {
+	// 		log.Printf("Error generating response: %v", err)
+	// 	}
+	//
+	// 	responseMsg := llms.TextParts(llms.ChatMessageTypeAI, response.Choices[0].Content)
+	//
+	// 	err = memory.Update(responseMsg)
+	// 	if err != nil {
+	// 		log.Printf("Error updating memory: %v", err)
+	// 	}
+	// })
 
 	stream := func(ctx context.Context, chunk []byte) error {
 		fmt.Println(string(chunk))
 		return nil
 	}
-
-	msgs = append(msgs, memory.RecallContext())
-	msgs = append(msgs, userMsg)
 
 	response, err := llm.GenerateContent(ctx, msgs, llms.WithStreamingFunc(stream))
 	if err != nil {
@@ -45,8 +69,9 @@ func Agent(input string) {
 
 	responseMsg := llms.TextParts(llms.ChatMessageTypeAI, response.Choices[0].Content)
 
-	err = memory.Update(responseMsg)
+	err = memory.Update(userMsg, responseMsg)
 	if err != nil {
 		log.Printf("Error updating memory: %v", err)
 	}
+
 }
