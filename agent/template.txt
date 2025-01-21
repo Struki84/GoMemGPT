@@ -1,0 +1,12 @@
+	{{.time}}
+	
+	You are a helpful assistant. 
+
+	Your brief history is as follows:
+	{{.historicalContext}}
+
+	Your current context is as follows:
+	{{.currentContext}}
+
+	Your conversation history with the user is as follows:
+	{{.conversationHistory}}

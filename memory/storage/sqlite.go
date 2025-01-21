@@ -48,33 +48,118 @@ func (db SqliteStorage) LoadMessages() ([]llms.MessageContent, error) {
 		return []llms.MessageContent{}, err
 	}
 
-	return []llms.MessageContent{}, nil
+	messages := []llms.MessageContent{}
+	for _, message := range db.Data.Messages {
+		var msgType llms.ChatMessageType = llms.ChatMessageType(message.Role)
+		messages = append(messages, llms.TextParts(msgType, message.Content))
+	}
+
+	return messages, nil
 }
 
 func (db SqliteStorage) SaveMessages(messages []llms.MessageContent) error {
+	msgs := []Message{}
+	for _, message := range messages {
+		msgs = append(db.Data.Messages, Message{
+			Role:    string(message.Role),
+			Content: message.Parts[0].(llms.TextContent).String(),
+		})
+	}
+
+	db.Data.Messages = msgs
+
+	err := db.DB.Save(&db.Data).Error
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (db SqliteStorage) LoadChatHistory() ([]llms.ChatMessage, error) {
-	return []llms.ChatMessage{}, nil
+	err := db.DB.Find(&db.Data).Error
+	if err != nil {
+		return []llms.ChatMessage{}, err
+	}
+
+	chatHistory := []llms.ChatMessage{}
+	for _, message := range db.Data.ChatHistory {
+		if message.Role == "human" {
+			chatMsg := llms.HumanChatMessage{
+				Content: message.Content,
+			}
+
+			chatHistory = append(chatHistory, chatMsg)
+		}
+
+		if message.Role == "ai" {
+			chatMsg := llms.AIChatMessage{
+				Content: message.Content,
+			}
+
+			chatHistory = append(chatHistory, chatMsg)
+		}
+	}
+
+	return chatHistory, nil
 }
 
 func (db SqliteStorage) SaveChatHistory(chatHistory []llms.ChatMessage) error {
+	msgs := []Message{}
+	for _, message := range chatHistory {
+		msgs = append(msgs, Message{
+			Role:    string(message.GetType()),
+			Content: message.GetContent(),
+		})
+	}
+
+	db.Data.ChatHistory = msgs
+
+	err := db.DB.Save(&db.Data).Error
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (db SqliteStorage) LoadWorkingContext() (string, error) {
-	return "", nil
+	err := db.DB.Find(&db.Data).Error
+	if err != nil {
+		return "", err
+	}
+
+	return db.Data.WorkingContext, nil
 }
 
 func (db SqliteStorage) SaveWorkingContext(workingContext string) error {
+	db.Data.WorkingContext = workingContext
+
+	err := db.DB.Save(&db.Data).Error
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (db SqliteStorage) LoadHistoricalContext() (string, error) {
-	return "", nil
+	err := db.DB.Find(&db.Data).Error
+	if err != nil {
+		return "", err
+	}
+
+	return db.Data.HistoricalContext, nil
 }
+
 func (db SqliteStorage) SaveHistoricalContext(historicalContext string) error {
+	db.Data.HistoricalContext = historicalContext
+
+	err := db.DB.Save(&db.Data).Error
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

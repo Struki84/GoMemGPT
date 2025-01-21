@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -14,6 +15,14 @@ var (
 	DefaultWorkingCtxSize float32 = 0.25
 	DefaulHistorySize     float32 = 0.75
 )
+
+type Manager interface {
+	RecallMemory(ctx context.Context) (llms.MessageContent, error)
+	SaveMemory(ctx context.Context, input, output llms.MessageContent) error
+	// needs .historicalContext and .currentContext
+	// needs .conversationHistory buffer string
+	LoadMemory(ctx context.Context) map[string]any
+}
 
 // this is my queue manager - The queue manager manages messages in recall storage
 // and the FIFO queue.
@@ -50,6 +59,36 @@ func NewMemoryManager(llm llms.Model, storage MemoryStorage) *MemoryManager {
 		historySize:    int(float32(maxContextSize) * DefaulHistorySize),
 		tokenEncoder:   encoder,
 	}
+}
+
+func (manager *MemoryManager) LoadMemory(ctx context.Context) map[string]any {
+	// sysMsg := llms.TextParts(llms.ChatMessageTypeSystem, manager.mainContext.SystemInstructions["LoadMemory:CurrentContext"])
+	//
+	// manager.processor.Input(sysMsg)
+	//
+	// manager.processor.Output(func(msg llms.MessageContent) {
+	//
+	// })
+
+	chatHistory, err := llms.GetBufferString(manager.mainContext.ChatHistory, "User: ", "AI: ")
+	if err != nil {
+		log.Printf("Error loading memory: %v", err)
+		return map[string]any{}
+	}
+
+	return map[string]any{
+		"currentContext":      manager.mainContext.WorkingContext,
+		"historicalContext":   manager.mainContext.HistoricalContext,
+		"conversationHistory": chatHistory,
+	}
+}
+
+func (cm *MemoryManager) SaveMemory(ctx context.Context, input, output string) error {
+	return nil
+}
+
+func (cm *MemoryManager) RecallMemory(ctx context.Context) (llms.MessageContent, error) {
+	return llms.MessageContent{}, nil
 }
 
 func (cm *MemoryManager) RecallContext() llms.MessageContent {

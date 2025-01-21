@@ -6,11 +6,9 @@ type Memory struct {
 	gorm.Model
 	WorkingContext    string
 	HistoricalContext string
-	Messages          *Messages
-	ChatHistory       *Messages
+	Messages          []Message
+	ChatHistory       []Message
 }
-
-type Messages []Message
 
 type Message struct {
 	Role    string
