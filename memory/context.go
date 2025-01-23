@@ -2,15 +2,17 @@ package memory
 
 import (
 	"encoding/json"
+	"log"
 
 	"github.com/tmc/langchaingo/llms"
+	"github.com/tmc/langchaingo/prompts"
 )
 
 var (
 	PrimerTemplate = `
 	{{.time}}
 	
-	You are a helpful assistant. 
+	You are an intelligent memory manager. 
 
 	Your brief history is as follows:
 	{{.historicalContext}}
@@ -19,7 +21,7 @@ var (
 	{{.currentContext}}
 
 	Your conversation history with the user is as follows:
-	{{.conversationHistory}}
+	{{.messages}
 	`
 
 	MemoryPressureWorkingContext = `
@@ -143,7 +145,7 @@ func NewMemoryContext(storage MemoryStorage) *MemoryContext {
 	return &MemoryContext{
 		Storage: storage,
 		SystemInstructions: map[string]string{
-			"assistant":                        PrimerTemplate,
+			"primer":                           PrimerTemplate,
 			"memoryPressure:WorkingContext":    MemoryPressureWorkingContext,
 			"memoryPressure:HistoricalContext": MemoryPressureHistoricalContext,
 			"memoryPressure:ChatHistory":       MemoryPressureChatHistory,
@@ -152,11 +154,32 @@ func NewMemoryContext(storage MemoryStorage) *MemoryContext {
 	}
 }
 
+func (memory *MemoryContext) SystemInstruction(instruction string, variables map[string]any) (string, error) {
+	template := prompts.PromptTemplate{
+		Template:         memory.SystemInstructions[instruction],
+		TemplateFormat:   prompts.TemplateFormatGoTemplate,
+		PartialVariables: variables,
+	}
+
+	prompt, err := template.Format(variables)
+	if err != nil {
+		log.Printf("Error formatting prompt: %v", err)
+		return "", err
+	}
+
+	return prompt, nil
+}
+
 // Load all the messages and context from core memory
 func (memory *MemoryContext) Load() error {
 	msgs, err := memory.Storage.LoadMessages()
 	if err != nil {
 		return err
+	}
+
+	if len(msgs) == 0 {
+		primerSysMsg := llms.TextParts(llms.ChatMessageTypeSystem, memory.SystemInstructions["primer"])
+		msgs = append(msgs, primerSysMsg)
 	}
 
 	chatHistory, err := memory.Storage.LoadChatHistory()
