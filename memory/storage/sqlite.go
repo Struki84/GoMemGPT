@@ -49,7 +49,7 @@ func (db SqliteStorage) LoadMessages() ([]llms.MessageContent, error) {
 	}
 
 	messages := []llms.MessageContent{}
-	for _, message := range db.Data.Messages {
+	for _, message := range *db.Data.Messages {
 		var msgType llms.ChatMessageType = llms.ChatMessageType(message.Role)
 		messages = append(messages, llms.TextParts(msgType, message.Content))
 	}
@@ -58,15 +58,15 @@ func (db SqliteStorage) LoadMessages() ([]llms.MessageContent, error) {
 }
 
 func (db SqliteStorage) SaveMessages(messages []llms.MessageContent) error {
-	msgs := []Message{}
+	msgs := Messages{}
 	for _, message := range messages {
-		msgs = append(db.Data.Messages, Message{
+		msgs = append(msgs, Message{
 			Role:    string(message.Role),
 			Content: message.Parts[0].(llms.TextContent).String(),
 		})
 	}
 
-	db.Data.Messages = msgs
+	db.Data.Messages = &msgs
 
 	err := db.DB.Save(&db.Data).Error
 	if err != nil {
@@ -77,48 +77,48 @@ func (db SqliteStorage) SaveMessages(messages []llms.MessageContent) error {
 }
 
 func (db SqliteStorage) LoadChatHistory() ([]llms.ChatMessage, error) {
-	err := db.DB.Find(&db.Data).Error
-	if err != nil {
-		return []llms.ChatMessage{}, err
-	}
+	// err := db.DB.Find(&db.Data).Error
+	// if err != nil {
+	// 	return []llms.ChatMessage{}, err
+	// }
+	//
+	// chatHistory := []llms.ChatMessage{}
+	// for _, message := range db.Data.ChatHistory {
+	// 	if message.Role == "human" {
+	// 		chatMsg := llms.HumanChatMessage{
+	// 			Content: message.Content,
+	// 		}
+	//
+	// 		chatHistory = append(chatHistory, chatMsg)
+	// 	}
+	//
+	// 	if message.Role == "ai" {
+	// 		chatMsg := llms.AIChatMessage{
+	// 			Content: message.Content,
+	// 		}
+	//
+	// 		chatHistory = append(chatHistory, chatMsg)
+	// 	}
+	// }
 
-	chatHistory := []llms.ChatMessage{}
-	for _, message := range db.Data.ChatHistory {
-		if message.Role == "human" {
-			chatMsg := llms.HumanChatMessage{
-				Content: message.Content,
-			}
-
-			chatHistory = append(chatHistory, chatMsg)
-		}
-
-		if message.Role == "ai" {
-			chatMsg := llms.AIChatMessage{
-				Content: message.Content,
-			}
-
-			chatHistory = append(chatHistory, chatMsg)
-		}
-	}
-
-	return chatHistory, nil
+	return []llms.ChatMessage{}, nil
 }
 
 func (db SqliteStorage) SaveChatHistory(chatHistory []llms.ChatMessage) error {
-	msgs := []Message{}
-	for _, message := range chatHistory {
-		msgs = append(msgs, Message{
-			Role:    string(message.GetType()),
-			Content: message.GetContent(),
-		})
-	}
-
-	db.Data.ChatHistory = msgs
-
-	err := db.DB.Save(&db.Data).Error
-	if err != nil {
-		return err
-	}
+	// msgs := []Message{}
+	// for _, message := range chatHistory {
+	// 	msgs = append(msgs, Message{
+	// 		Role:    string(message.GetType()),
+	// 		Content: message.GetContent(),
+	// 	})
+	// }
+	//
+	// db.Data.ChatHistory = msgs
+	//
+	// err := db.DB.Save(&db.Data).Error
+	// if err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
@@ -144,21 +144,23 @@ func (db SqliteStorage) SaveWorkingContext(workingContext string) error {
 }
 
 func (db SqliteStorage) LoadHistoricalContext() (string, error) {
-	err := db.DB.Find(&db.Data).Error
-	if err != nil {
-		return "", err
-	}
+	// err := db.DB.Find(&db.Data).Error
+	// if err != nil {
+	// 	return "", err
+	// }
+	//
+	// return db.Data.HistoricalContext, nil
 
-	return db.Data.HistoricalContext, nil
+	return "", nil
 }
 
 func (db SqliteStorage) SaveHistoricalContext(historicalContext string) error {
-	db.Data.HistoricalContext = historicalContext
-
-	err := db.DB.Save(&db.Data).Error
-	if err != nil {
-		return err
-	}
+	// db.Data.HistoricalContext = historicalContext
+	//
+	// err := db.DB.Save(&db.Data).Error
+	// if err != nil {
+	// 	return err
+	// }
 
 	return nil
 }

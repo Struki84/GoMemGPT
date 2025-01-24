@@ -128,13 +128,13 @@ func (executor *Executor) Run(fn llms.ToolCall) (string, error) {
 		}
 
 		return "Memory context memorized", nil
-	case "Reflect":
-		err := executor.mainContext.Reflect(fn.FunctionCall.Arguments)
-		if err != nil {
-			return "", err
-		}
-
-		return "Memory context reflected", nil
+	// case "Reflect":
+	// 	err := executor.mainContext.Reflect(fn.FunctionCall.Arguments)
+	// 	if err != nil {
+	// 		return "", err
+	// 	}
+	//
+	// 	return "Memory context reflected", nil
 	case "Recall":
 		err := executor.mainContext.Recall()
 		if err != nil {
