@@ -6,57 +6,12 @@ import (
 
 	"github.com/pkoukk/tiktoken-go"
 	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/prompts"
 )
 
 var (
 	defaultContextSize    float32 = 4096
 	defualtMsgsSize       float32 = 0.7
 	defaultWorkingCtxSize float32 = 0.3
-
-	// Templates
-	primerAssistantTemplate = `
-	{{.time}}
-	
-	You are a helpful assistant. 
-
-	Your current working context is as follows:
-	{{.workingContext}}
-	`
-
-	primerMemoryTemplate = `
-	{{.time}}
-	
-	You are an intelligent memory manager. 
-
-	Your brief history is as follows:
-	{{.historicalContext}}
-
-	Your current context is as follows:
-	{{.currentContext}}
-
-	Your conversation history with the user is as follows:
-	{{.messages}
-	`
-
-	memoryPressureWorkingContext = `
-	{{.time}}
-	
-	Memory pressure warning: WorkingContext
-	
-	Working context:
-	{{.workingContext}}
-
-	Working context size: {{.workingContextSize}}
-	`
-
-	memoryPressureMessages = `
-	{{.time}}
-	
-	Memory pressure warning: Messages
-	
-	Messages size: {{.messagesSize}}
-	`
 )
 
 type MemoryStorage interface {
@@ -98,7 +53,6 @@ type MemoryStorage interface {
 
 // 1. Needs to be able to load short term memeory into curent context from a persistance DB
 // 2. Needs to be able to save current context into persistance DB
-// 3.
 type MemoryContext struct {
 	// FIFO Message Queue, stores a rolling history of messages,
 	// including  messages between the agent and user, as well as system
@@ -113,19 +67,12 @@ type MemoryContext struct {
 	// writeable only via MemGPT function calls.
 	WorkingContext string
 
-	// The system instructions are readonly (static) and contain information
-	// on the MemGPT control flow, the intended usage of the different memory
-	// levels, and instructions on how to use the MemGPT functions
-	// (e.g. how to retrieve out-of-context data).
-	SystemInstructions map[string]string
-
 	// Intarface for perfomring operations on the data storage
 	Storage MemoryStorage
 
 	contextSize    float32
 	workingCtxSize float32
 	msgsSize       float32
-	encoder        *tiktoken.Tiktoken
 }
 
 // MemoryContext can be viewd as state, or core memory with
@@ -142,45 +89,29 @@ type MemoryContext struct {
 // archive memory - unlimited size db storage for all messages and contexts
 
 func NewMemoryContext(storage MemoryStorage) *MemoryContext {
-	encoder, err := tiktoken.GetEncoding("cl100k_base")
+	return &MemoryContext{
+		Storage:     storage,
+		contextSize: defaultContextSize,
+	}
+}
 
+func (memory *MemoryContext) CurrentWorkingContextSize() int {
+	encoder, err := tiktoken.GetEncoding("cl100k_base")
 	if err != nil {
 		log.Printf("Error creating tiktoken encoder: %v", err)
-		return nil
+		return 0
 	}
 
-	return &MemoryContext{
-		encoder:        encoder,
-		contextSize:    defaultContextSize,
-		Storage:        storage,
-		WorkingContext: "how many tokens is this?",
-		SystemInstructions: map[string]string{
-			"primer:MemoryTemplate":         primerMemoryTemplate,
-			"primer:assistantTemplate":      primerAssistantTemplate,
-			"memoryPressure:WorkingContext": memoryPressureWorkingContext,
-			"memoryPressure:Messages":       memoryPressureMessages,
-		},
-	}
+	return len(encoder.Encode(memory.WorkingContext, nil, nil))
 }
 
-func (memory *MemoryContext) SystemInstruction(instruction string, variables map[string]any) (string, error) {
-	template := prompts.PromptTemplate{
-		Template:         memory.SystemInstructions[instruction],
-		TemplateFormat:   prompts.TemplateFormatGoTemplate,
-		PartialVariables: variables,
-	}
-
-	prompt, err := template.Format(variables)
-	if err != nil {
-		log.Printf("Error formatting prompt: %v", err)
-		return "", err
-	}
-
-	return prompt, nil
-}
-
-func (memory *MemoryContext) MessagesTokenSize() int {
+func (memory *MemoryContext) CurrentMessagesSize() int {
 	totalTokens := 0
+	encoder, err := tiktoken.GetEncoding("cl100k_base")
+	if err != nil {
+		log.Printf("Error creating tiktoken encoder: %v", err)
+		return 0
+	}
 
 	combineAllTextParts := func(parts []llms.ContentPart) string {
 		result := ""
@@ -200,7 +131,7 @@ func (memory *MemoryContext) MessagesTokenSize() int {
 
 	for _, msg := range memory.Messages {
 		contentToEncode := fmt.Sprintf("%s: %s", msg.Role, combineAllTextParts(msg.Parts))
-		tokenIDs := memory.encoder.Encode(contentToEncode, nil, nil)
+		tokenIDs := encoder.Encode(contentToEncode, nil, nil)
 		totalTokens += len(tokenIDs)
 	}
 

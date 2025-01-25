@@ -13,6 +13,7 @@ type Agent struct {
 	llm       llms.Model
 	processor *LLMProcessor
 	memory    *MemoryContext
+	system    *SystemMonitor
 	ready     *sync.WaitGroup
 }
 
@@ -42,7 +43,7 @@ func (agent *Agent) Call(input string, output func(string)) {
 	})
 
 	log.Printf("Calling agent with input: %s", input)
-	sysPrompt, err := agent.memory.SystemInstruction("assistant", map[string]any{
+	sysPrompt, err := agent.system.Instruction("assistant", map[string]any{
 		"time":           time.Now().Format("January 02, 2006"),
 		"workingContext": agent.memory.WorkingContext,
 	})
@@ -62,36 +63,5 @@ func (agent *Agent) Call(input string, output func(string)) {
 
 	agent.processor.Input(userMsg)
 
-	currentWorkingCtxSize := agent.memory.encoder.Encode(agent.memory.WorkingContext, nil, nil)
-	if len(currentWorkingCtxSize) >= int(agent.memory.contextSize*0.9) {
-		// compress working context
-
-		sysPrompt, err := agent.memory.SystemInstruction("memoryPressure:WorkingContext", map[string]any{
-			"workingContextSize": len(currentWorkingCtxSize),
-		})
-
-		if err != nil {
-			log.Printf("Error formatting prompt: %v", err)
-			return
-		}
-
-		sysMsg := llms.TextParts(llms.ChatMessageTypeSystem, sysPrompt)
-		agent.processor.Input(sysMsg)
-	}
-
-	if agent.memory.MessagesTokenSize() >= int(agent.memory.msgsSize*0.9) {
-		// compress messages
-
-		sysPrompt, err := agent.memory.SystemInstruction("memoryPressure:Messages", map[string]any{
-			"messagesTokenSize": agent.memory.MessagesTokenSize(),
-		})
-
-		if err != nil {
-			log.Printf("Error formatting prompt: %v", err)
-			return
-		}
-
-		sysMsg := llms.TextParts(llms.ChatMessageTypeSystem, sysPrompt)
-		agent.processor.Input(sysMsg)
-	}
+	agent.system.InspectMemoryPressure(agent)
 }
