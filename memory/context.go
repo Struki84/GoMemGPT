@@ -15,7 +15,7 @@ var (
 	defaultWorkingCtxSize float32 = 0.3
 
 	// Templates
-	assistantTemplate = `
+	primerAssistantTemplate = `
 	{{.time}}
 	
 	You are a helpful assistant. 
@@ -24,7 +24,7 @@ var (
 	{{.workingContext}}
 	`
 
-	primerTemplate = `
+	primerMemoryTemplate = `
 	{{.time}}
 	
 	You are an intelligent memory manager. 
@@ -155,8 +155,8 @@ func NewMemoryContext(storage MemoryStorage) *MemoryContext {
 		Storage:        storage,
 		WorkingContext: "how many tokens is this?",
 		SystemInstructions: map[string]string{
-			"primer":                        primerTemplate,
-			"assistant":                     assistantTemplate,
+			"primer:MemoryTemplate":         primerMemoryTemplate,
+			"primer:assistantTemplate":      primerAssistantTemplate,
 			"memoryPressure:WorkingContext": memoryPressureWorkingContext,
 			"memoryPressure:Messages":       memoryPressureMessages,
 		},
