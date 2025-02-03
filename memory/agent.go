@@ -58,7 +58,7 @@ func (agent *Agent) Call(input string, output func(string)) {
 	sysMsg := llms.TextParts(llms.ChatMessageTypeSystem, sysPrompt)
 	userMsg := llms.TextParts(llms.ChatMessageTypeHuman, input)
 
-	agent.memory.Messages = append(agent.memory.Messages, sysMsg)
+	agent.memory.Messages[0] = sysMsg
 	agent.memory.Messages = append(agent.memory.Messages, userMsg)
 
 	agent.processor.Input(userMsg)

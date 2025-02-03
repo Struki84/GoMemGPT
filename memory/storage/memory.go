@@ -4,40 +4,18 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
-	"fmt"
 
-	"github.com/pkoukk/tiktoken-go"
 	"gorm.io/gorm"
 )
 
 type Memory struct {
 	gorm.Model
-	WorkingContext string    `json:"workingContext"`
-	Messages       *Messages `json:"messages"`
+	WorkingContext  string    `json:"workingContext"`
+	WorkingMessages *Messages `json:"workingMessage"`
+	Messages        *Messages `json:"messages"`
 }
 
 type Messages []Message
-
-func (messages Messages) TokenSize() (int, error) {
-	encoder, err := tiktoken.GetEncoding("cl100k_base")
-
-	if err != nil {
-		return 0, err
-	}
-
-	totalTokens := 0
-
-	for _, msg := range messages {
-		contentToEncode := fmt.Sprintf("%s: %s", msg.Role, msg.Content)
-		tokenIDs := encoder.Encode(contentToEncode, nil, nil)
-		totalTokens += len(tokenIDs)
-	}
-
-	// The chat format typically has an extra 2 tokens at the end
-	totalTokens += 2
-
-	return totalTokens, nil
-}
 
 type Message struct {
 	Role    string `json:"type"`

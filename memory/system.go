@@ -3,7 +3,6 @@ package memory
 import (
 	"log"
 
-	"github.com/pkoukk/tiktoken-go"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/prompts"
 )
@@ -39,9 +38,6 @@ var (
 	{{.time}}
 	
 	Memory pressure warning: WorkingContext
-	
-	Working context:
-	{{.workingContext}}
 
 	Working context size: {{.workingContextSize}}
 	`
@@ -91,9 +87,9 @@ func (system *SystemMonitor) Instruction(instruction string, variables map[strin
 }
 
 func (system *SystemMonitor) InspectMemoryPressure(agent *Agent) {
-	if agent.memory.currentWorkingContextSize() >= int(agent.memory.contextSize*0.9) {
+	if agent.memory.CurrentWorkingContextSize() >= int(agent.memory.contextSize*0.9) {
 		sysPrompt, err := system.Instruction("memoryPressure:WorkingContext", map[string]any{
-			"workingContextSize": agent.memory.currentWorkingContextSize(),
+			"workingContextSize": agent.memory.CurrentWorkingContextSize(),
 		})
 
 		if err != nil {
@@ -105,9 +101,9 @@ func (system *SystemMonitor) InspectMemoryPressure(agent *Agent) {
 		agent.processor.Input(sysMsg)
 	}
 
-	if agent.memory.MessagesTokenSize() >= int(agent.memory.msgsSize*0.9) {
+	if agent.memory.CurrentMessagesSize() >= int(agent.memory.msgsSize*0.9) {
 		sysPrompt, err := system.Instruction("memoryPressure:Messages", map[string]any{
-			"messagesSize": agent.memory.MessagesTokenSize(),
+			"messagesSize": agent.memory.CurrentMessagesSize(),
 		})
 
 		if err != nil {

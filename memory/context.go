@@ -15,49 +15,28 @@ var (
 )
 
 type MemoryStorage interface {
-	LoadShortTermMemory() ([]llms.MessageContent, error)
-	SaveShortTermMemory(messages []llms.MessageContent) error
-
-	LoadLongTermMemory() ([]llms.MessageContent, error)
-	SaveLongTermMemory(messages []llms.MessageContent) error
-
 	LoadMessages() ([]llms.MessageContent, error)
 	SaveMessages(messages []llms.MessageContent) error
-
-	LoadChatHistory() ([]llms.ChatMessage, error)
-	SaveChatHistory(chatHistory []llms.ChatMessage) error
 
 	LoadWorkingContext() (string, error)
 	SaveWorkingContext(workingContext string) error
 
-	LoadHistoricalContext() (string, error)
-	SaveHistoricalContext(historicalContext string) error
-
 	RecallMessages() ([]llms.MessageContent, error)
 	ArchiveMessages(messages []llms.MessageContent) error
 
-	RecallChatHistory() ([]llms.ChatMessage, error)
-	ArchiveChatHistory(chatHistory []llms.ChatMessage) error
-
 	RecallWorkingContext() (string, error)
 	ArchiveWorkingContext(workingContext string) error
-
-	RecallHistoricalContext() (string, error)
-	ArchiveHistoricalContext(historicalContext string) error
 
 	SearchMesssgesArchives(query string) ([]llms.MessageContent, error)
 	SearchChatHistoryArchives(query string) ([]llms.ChatMessage, error)
 }
 
-// Main context
-
-// 1. Needs to be able to load short term memeory into curent context from a persistance DB
-// 2. Needs to be able to save current context into persistance DB
+// Main memory context
 type MemoryContext struct {
 	// FIFO Message Queue, stores a rolling history of messages,
 	// including  messages between the agent and user, as well as system
 	// messages (e.g. memory warnings) and function call inputs
-	// and outputs. The first indehx in the FIFO queue stores a system
+	// and outputs. The first index in the FIFO queue stores a system
 	// message containing a recursive summary of messages that have
 	// been evicted from the queue.
 	Messages []llms.MessageContent
@@ -71,8 +50,8 @@ type MemoryContext struct {
 	Storage MemoryStorage
 
 	contextSize    float32
-	workingCtxSize float32
 	msgsSize       float32
+	workingCtxSize float32
 }
 
 // MemoryContext can be viewd as state, or core memory with
@@ -90,6 +69,7 @@ type MemoryContext struct {
 
 func NewMemoryContext(storage MemoryStorage) *MemoryContext {
 	return &MemoryContext{
+		Messages:    make([]llms.MessageContent, 0),
 		Storage:     storage,
 		contextSize: defaultContextSize,
 	}
@@ -141,7 +121,7 @@ func (memory *MemoryContext) CurrentMessagesSize() int {
 	return totalTokens
 }
 
-// Load all the messages and context from core memory
+// Load short term memory from persistance DB into current memory context
 func (memory *MemoryContext) Load() error {
 	msgs, err := memory.Storage.LoadMessages()
 	if err != nil {
@@ -175,13 +155,9 @@ func (memory *MemoryContext) Save() error {
 	return nil
 }
 
-// Summarize or compress memories into working context or historical context
-// to save space
-func (memory *MemoryContext) Compress(summary string) error {
-	// inputs are working and historical Summary generated
-	// by llm, based on chat history and messsages
-	// updates memory.WorkingContext and memory.HistoricalContext
-	// saves the memory context state to core memory
+func (memory *MemoryContext) Reflect(summary string) error {
+	// inputs is working contex. Summary generated
+	// by llm based on all the current messsages in context
 
 	memory.WorkingContext = summary
 
@@ -201,115 +177,40 @@ func (memory *MemoryContext) Memorize(summary string) error {
 	// saves the new summary to core memory and archive memory
 	// input should be the summary of the flushed chat history messages
 
-	err := memory.FlushMessages()
+	// we flush all the messages from shrot term memory and leave only the last 3
+	// the evicted messages are appended to long term memory
+	// this is probably a temp solution
+	clanedMsgs := memory.Messages[max(0, len(memory.Messages)-3):]
+
+	err := memory.Storage.ArchiveMessages(memory.Messages)
 	if err != nil {
 		return err
 	}
 
-	err = memory.Storage.ArchiveWorkingContext(memory.WorkingContext)
+	err = memory.Storage.SaveMessages(clanedMsgs)
+	if err != nil {
+		return err
+	}
+
+	memory.Messages = clanedMsgs
+
+	err = memory.Storage.SaveWorkingContext(summary)
 	if err != nil {
 		return err
 	}
 
 	memory.WorkingContext = summary
 
-	err = memory.Storage.SaveWorkingContext(memory.WorkingContext)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
-// Generate internal thoughts about the context
-// func (memory *MemoryContext) Reflect(args string) error {
-// can happen when messages is full
-// save messages to archive storage
-// removes overflowing messages in messages
-// saves the new summary to core memory and archive memory
-// input should be the summary of the flushed messages
-
-// 	var input struct {
-// 		Summary string `json:"summary"`
-// 	}
-//
-// 	err := json.Unmarshal([]byte(args), &input)
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	err = memory.FlushMessages()
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	memory.HistoricalContext = input.Summary
-//
-// 	err = memory.Storage.SaveHistoricalContext(memory.HistoricalContext)
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	err = memory.Storage.ArchiveHistoricalContext(memory.HistoricalContext)
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	return nil
-// }
-
-func (memory *MemoryContext) Archive() error {
-	err := memory.Storage.ArchiveWorkingContext(memory.WorkingContext)
-	if err != nil {
-		return err
-	}
-
-	err = memory.Storage.ArchiveMessages(memory.Messages)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Recall information from archive storage
 func (memory *MemoryContext) Recall() error {
-	workingContext, err := memory.Storage.RecallWorkingContext()
-	if err != nil {
-		return err
-	}
-
 	msgs, err := memory.Storage.RecallMessages()
 	if err != nil {
 		return err
 	}
 
 	memory.Messages = msgs
-	memory.WorkingContext = workingContext
-
-	return nil
-}
-
-func (memory *MemoryContext) Search() error {
-	// use similarity search to recall information from archive storage
-	// input will be tbd
-
-	return nil
-}
-
-func (memory *MemoryContext) FlushMessages() error {
-	// while the token size of all messages in buffer
-	// is equal or greater than the max token size  minus the current input msg(?)
-	// keep removing messages from messages buffer
-
-	return nil
-
-}
-
-func (memory *MemoryContext) FlushChatHistory() error {
-	// while the token size of all chat history messages in buffer
-	// is equal or greater than the max token size  minus the last input msg(?)
-	// keep removing messages from chat history buffer
 
 	return nil
 }

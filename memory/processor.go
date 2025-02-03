@@ -60,6 +60,22 @@ func (processor *LLMProcessor) handleMessage(ctx context.Context, msg llms.Messa
 	case llms.ChatMessageTypeSystem, llms.ChatMessageTypeHuman:
 		processor.callLLM(ctx)
 	case llms.ChatMessageTypeFunction:
+		// alt version
+		// for _, part := range msg.Parts {
+		// 	if toolCall, ok := part.(llms.ToolCall); ok {
+		// 		if toolCall.FunctionCall.Name == "InternalOutput" {
+		// 			newMsg := llms.TextParts(llms.ChatMessageTypeAI, msg.Parts[0].(llms.TextContent).String())
+		// 			processor.mainContext.Messages = append(processor.mainContext.Messages, newMsg)
+		// 		}
+		//
+		// 		if toolCall.FunctionCall.Name == "ExternalOutput" {
+		// 			newMsg := llms.TextParts(llms.ChatMessageTypeAI, msg.Parts[0].(llms.TextContent).String())
+		// 			processor.mainContext.Messages = append(processor.mainContext.Messages, newMsg)
+		// 			processor.mainProc <- newMsg
+		// 		}
+		// 	}
+		// }
+
 		output := false
 
 		for _, part := range msg.Parts {
