@@ -2,6 +2,7 @@ package memory
 
 import (
 	"log"
+	"time"
 
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/prompts"
@@ -52,6 +53,7 @@ var (
 )
 
 type SystemMonitor struct {
+	mainContext *MemoryContext
 	// The system instructions are readonly (static) and contain information
 	// on the MemGPT control flow, the intended usage of the different memory
 	// levels, and instructions on how to use the MemGPT functions
@@ -59,8 +61,9 @@ type SystemMonitor struct {
 	Instructions map[string]string
 }
 
-func NewSystemMonitor() *SystemMonitor {
+func NewSystemMonitor(mainContext *MemoryContext) *SystemMonitor {
 	return &SystemMonitor{
+		mainContext: mainContext,
 		Instructions: map[string]string{
 			"primer:MemoryTemplate":         primerMemoryTemplate,
 			"primer:assistantTemplate":      primerAssistantTemplate,
@@ -86,32 +89,59 @@ func (system *SystemMonitor) Instruction(instruction string, variables map[strin
 	return prompt, nil
 }
 
-func (system *SystemMonitor) InspectMemoryPressure(agent *Agent) {
-	if agent.memory.CurrentWorkingContextSize() >= int(agent.memory.contextSize*0.9) {
+func (system *SystemMonitor) InspectMemoryPressure() []llms.MessageContent {
+	warrnings := []llms.MessageContent{}
+
+	if system.mainContext.CurrentWorkingContextSize() >= int(system.mainContext.workingCtxSize*0.9) {
 		sysPrompt, err := system.Instruction("memoryPressure:WorkingContext", map[string]any{
-			"workingContextSize": agent.memory.CurrentWorkingContextSize(),
+			"workingContextSize": system.mainContext.CurrentWorkingContextSize(),
 		})
 
 		if err != nil {
 			log.Printf("Error formatting prompt: %v", err)
-			return
+			return warrnings
 		}
 
 		sysMsg := llms.TextParts(llms.ChatMessageTypeSystem, sysPrompt)
-		agent.processor.Input(sysMsg)
+
+		warrnings = append(warrnings, sysMsg)
 	}
 
-	if agent.memory.CurrentMessagesSize() >= int(agent.memory.msgsSize*0.9) {
+	if system.mainContext.CurrentMessagesSize() >= int(system.mainContext.msgsSize*0.9) {
 		sysPrompt, err := system.Instruction("memoryPressure:Messages", map[string]any{
-			"messagesSize": agent.memory.CurrentMessagesSize(),
+			"messagesSize": system.mainContext.CurrentMessagesSize(),
 		})
 
 		if err != nil {
 			log.Printf("Error formatting prompt: %v", err)
-			return
+			return warrnings
 		}
 
 		sysMsg := llms.TextParts(llms.ChatMessageTypeSystem, sysPrompt)
-		agent.processor.Input(sysMsg)
+
+		warrnings = append(warrnings, sysMsg)
 	}
+
+	return warrnings
+}
+
+func (system *SystemMonitor) AppendMessage(msg llms.MessageContent) error {
+	primerPrompt, err := system.Instruction("primer:assistantTemplate", map[string]any{
+		"time":           time.Now().Format("January 02, 2006"),
+		"workingContext": system.mainContext.WorkingContext,
+	})
+
+	if err != nil {
+		log.Printf("Error formatting prompt: %v", err)
+		return err
+	}
+
+	// log.Printf("System primer prompt: %s", primerPrompt)
+
+	primerMsg := llms.TextParts(llms.ChatMessageTypeSystem, primerPrompt)
+
+	system.mainContext.Messages[0] = primerMsg
+	system.mainContext.Messages = append(system.mainContext.Messages, msg)
+
+	return nil
 }

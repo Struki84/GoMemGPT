@@ -10,20 +10,20 @@ import (
 )
 
 type LLMProcessor struct {
-	llm         llms.Model
-	mainContext *MemoryContext
-	mainProc    chan llms.MessageContent
-	executor    Executor
-	output      func(llms.MessageContent)
+	llm      llms.Model
+	System   *SystemMonitor
+	mainProc chan llms.MessageContent
+	executor Executor
+	output   func(llms.MessageContent)
 }
 
 func NewLLMProcessor(llm llms.Model, mainContext *MemoryContext) *LLMProcessor {
 
 	return &LLMProcessor{
-		llm:         llm,
-		mainContext: mainContext,
-		executor:    NewExecutor(mainContext),
-		mainProc:    make(chan llms.MessageContent, 100),
+		llm:      llm,
+		System:   NewSystemMonitor(mainContext),
+		executor: NewExecutor(mainContext),
+		mainProc: make(chan llms.MessageContent, 100),
 	}
 }
 
@@ -61,43 +61,43 @@ func (processor *LLMProcessor) handleMessage(ctx context.Context, msg llms.Messa
 		processor.callLLM(ctx)
 	case llms.ChatMessageTypeFunction:
 		// alt version
-		// for _, part := range msg.Parts {
-		// 	if toolCall, ok := part.(llms.ToolCall); ok {
-		// 		if toolCall.FunctionCall.Name == "InternalOutput" {
-		// 			newMsg := llms.TextParts(llms.ChatMessageTypeAI, msg.Parts[0].(llms.TextContent).String())
-		// 			processor.mainContext.Messages = append(processor.mainContext.Messages, newMsg)
-		// 		}
-		//
-		// 		if toolCall.FunctionCall.Name == "ExternalOutput" {
-		// 			newMsg := llms.TextParts(llms.ChatMessageTypeAI, msg.Parts[0].(llms.TextContent).String())
-		// 			processor.mainContext.Messages = append(processor.mainContext.Messages, newMsg)
-		// 			processor.mainProc <- newMsg
-		// 		}
-		// 	}
-		// }
-
-		output := false
-
 		for _, part := range msg.Parts {
 			if toolCall, ok := part.(llms.ToolCall); ok {
 				if toolCall.FunctionCall.Name == "InternalOutput" {
-					output = true
 					newMsg := llms.TextParts(llms.ChatMessageTypeAI, msg.Parts[0].(llms.TextContent).String())
-					processor.mainContext.Messages = append(processor.mainContext.Messages, newMsg)
+					processor.System.AppendMessage(newMsg)
 				}
 
 				if toolCall.FunctionCall.Name == "ExternalOutput" {
-					output = true
 					newMsg := llms.TextParts(llms.ChatMessageTypeAI, msg.Parts[0].(llms.TextContent).String())
-					processor.mainContext.Messages = append(processor.mainContext.Messages, newMsg)
-					processor.output(newMsg)
+					processor.System.AppendMessage(newMsg)
+					processor.mainProc <- newMsg
 				}
 			}
 		}
 
-		if !output {
-			processor.callLLM(ctx)
-		}
+		// output := false
+		//
+		// for _, part := range msg.Parts {
+		// 	if toolCall, ok := part.(llms.ToolCall); ok {
+		// 		if toolCall.FunctionCall.Name == "InternalOutput" {
+		// 			output = true
+		// 			newMsg := llms.TextParts(llms.ChatMessageTypeAI, msg.Parts[0].(llms.TextContent).String())
+		// 			processor.system.AppendMessage(newMsg)
+		// 		}
+		//
+		// 		if toolCall.FunctionCall.Name == "ExternalOutput" {
+		// 			output = true
+		// 			newMsg := llms.TextParts(llms.ChatMessageTypeAI, msg.Parts[0].(llms.TextContent).String())
+		// 			processor.system.AppendMessage(newMsg)
+		// 			processor.output(newMsg)
+		// 		}
+		// 	}
+		// }
+		//
+		// if !output {
+		// 	processor.callLLM(ctx)
+		// }
 
 	case llms.ChatMessageTypeAI:
 		tool := false
@@ -111,13 +111,13 @@ func (processor *LLMProcessor) handleMessage(ctx context.Context, msg llms.Messa
 					newMsg := llms.TextParts(llms.ChatMessageTypeFunction, fmt.Sprintf("Error running function: %v", err))
 					newMsg.Parts = append(newMsg.Parts, toolCall)
 
-					processor.mainContext.Messages = append(processor.mainContext.Messages, newMsg)
+					processor.System.AppendMessage(newMsg)
 					processor.mainProc <- newMsg
 				} else {
 					newMsg := llms.TextParts(llms.ChatMessageTypeFunction, executionResult)
 					newMsg.Parts = append(newMsg.Parts, toolCall)
 
-					processor.mainContext.Messages = append(processor.mainContext.Messages, newMsg)
+					processor.System.AppendMessage(newMsg)
 					processor.mainProc <- newMsg
 				}
 			}
@@ -130,7 +130,7 @@ func (processor *LLMProcessor) handleMessage(ctx context.Context, msg llms.Messa
 }
 
 func (processor *LLMProcessor) callLLM(ctx context.Context) {
-	response, _ := processor.llm.GenerateContent(ctx, processor.mainContext.Messages,
+	response, _ := processor.llm.GenerateContent(ctx, processor.System.mainContext.Messages,
 		llms.WithTools(processor.executor.functions),
 	)
 
@@ -140,6 +140,6 @@ func (processor *LLMProcessor) callLLM(ctx context.Context) {
 		newMsg.Parts = append(newMsg.Parts, toolCall)
 	}
 
-	processor.mainContext.Messages = append(processor.mainContext.Messages, newMsg)
+	processor.System.AppendMessage(newMsg)
 	processor.mainProc <- newMsg
 }

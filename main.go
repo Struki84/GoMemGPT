@@ -8,15 +8,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Struki84/GoMemGPT/memory"
 	"github.com/Struki84/GoMemGPT/memory/storage"
 	"github.com/tmc/langchaingo/llms/openai"
 )
-
-var chatAgent memory.Agent
-
-func init() {
-}
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -31,7 +25,7 @@ func main() {
 		log.Printf("Error initializing LLM: %v", err)
 	}
 
-	chatAgent = memory.NewAgent(ctx, llm, memoryStorage)
+	chatAgent := NewAgent(ctx, llm, memoryStorage)
 
 	scanner := bufio.NewScanner(os.Stdin)
 

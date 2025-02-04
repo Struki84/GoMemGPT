@@ -9,9 +9,9 @@ import (
 )
 
 var (
-	defaultContextSize    float32 = 4096
-	defualtMsgsSize       float32 = 0.7
-	defaultWorkingCtxSize float32 = 0.3
+	maxContextSize    float32 = 4096
+	maxMsgsSize       float32 = 0.7
+	maxWorkingCtxSize float32 = 0.3
 )
 
 type MemoryStorage interface {
@@ -26,9 +26,6 @@ type MemoryStorage interface {
 
 	RecallWorkingContext() (string, error)
 	ArchiveWorkingContext(workingContext string) error
-
-	SearchMesssgesArchives(query string) ([]llms.MessageContent, error)
-	SearchChatHistoryArchives(query string) ([]llms.ChatMessage, error)
 }
 
 // Main memory context
@@ -69,9 +66,11 @@ type MemoryContext struct {
 
 func NewMemoryContext(storage MemoryStorage) *MemoryContext {
 	return &MemoryContext{
-		Messages:    make([]llms.MessageContent, 0),
-		Storage:     storage,
-		contextSize: defaultContextSize,
+		Messages:       make([]llms.MessageContent, 0),
+		Storage:        storage,
+		contextSize:    maxContextSize,
+		msgsSize:       maxContextSize * maxMsgsSize,
+		workingCtxSize: maxContextSize * maxWorkingCtxSize,
 	}
 }
 
@@ -119,98 +118,4 @@ func (memory *MemoryContext) CurrentMessagesSize() int {
 	totalTokens += 2
 
 	return totalTokens
-}
-
-// Load short term memory from persistance DB into current memory context
-func (memory *MemoryContext) Load() error {
-	msgs, err := memory.Storage.LoadMessages()
-	if err != nil {
-		return err
-	}
-
-	workingContext, err := memory.Storage.LoadWorkingContext()
-	if err != nil {
-		return err
-	}
-
-	memory.Messages = msgs
-	memory.WorkingContext = workingContext
-
-	return nil
-}
-
-// Save current memory context state to core memory
-func (memory *MemoryContext) Save() error {
-
-	err := memory.Storage.SaveMessages(memory.Messages)
-	if err != nil {
-		return err
-	}
-
-	err = memory.Storage.SaveWorkingContext(memory.WorkingContext)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (memory *MemoryContext) Reflect(summary string) error {
-	// inputs is working contex. Summary generated
-	// by llm based on all the current messsages in context
-
-	memory.WorkingContext = summary
-
-	err := memory.Storage.SaveWorkingContext(memory.WorkingContext)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Move infromation from core memory to archive memory
-func (memory *MemoryContext) Memorize(summary string) error {
-	// can happen when chat history is full
-	// save chat history msgs to archive storage
-	// removes overflowing messages in chat history
-	// saves the new summary to core memory and archive memory
-	// input should be the summary of the flushed chat history messages
-
-	// we flush all the messages from shrot term memory and leave only the last 3
-	// the evicted messages are appended to long term memory
-	// this is probably a temp solution
-	clanedMsgs := memory.Messages[max(0, len(memory.Messages)-3):]
-
-	err := memory.Storage.ArchiveMessages(memory.Messages)
-	if err != nil {
-		return err
-	}
-
-	err = memory.Storage.SaveMessages(clanedMsgs)
-	if err != nil {
-		return err
-	}
-
-	memory.Messages = clanedMsgs
-
-	err = memory.Storage.SaveWorkingContext(summary)
-	if err != nil {
-		return err
-	}
-
-	memory.WorkingContext = summary
-
-	return nil
-}
-
-func (memory *MemoryContext) Recall() error {
-	msgs, err := memory.Storage.RecallMessages()
-	if err != nil {
-		return err
-	}
-
-	memory.Messages = msgs
-
-	return nil
 }

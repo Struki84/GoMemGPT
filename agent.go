@@ -1,77 +1,56 @@
 package main
 
-// import (
-// 	"context"
-// 	"fmt"
-// 	"log"
-//
-// 	"github.com/Struki84/GoMemGPT/memory"
-// 	"github.com/Struki84/GoMemGPT/memory/storage"
-// 	"github.com/tmc/langchaingo/llms"
-// 	"github.com/tmc/langchaingo/llms/openai"
-// )
-//
-// func Agent(input string) {
-// 	ctx := context.Background()
-//
-// 	llm, err := openai.New(
-// 		openai.WithModel("gpt-4o"),
-// 	)
-// 	if err != nil {
-// 		log.Printf("Error initializing LLM: %v", err)
-// 	}
-//
-// 	sqlStorage := storage.NewSqliteStorage()
-//
-// 	memory := memory.NewMemoryManager(llm, sqlStorage)
-// 	userMsg := llms.TextParts(llms.ChatMessageTypeHuman, input)
-//
-// 	msgs := make([]llms.MessageContent, 0)
-// 	msgs = append(msgs, memory.RecallContext())
-// 	msgs = append(msgs, userMsg)
+import (
+	"context"
+	"log"
+	"sync"
 
-// err = memory.Update(userMsg)
-// if err != nil {
-// 	log.Printf("Error updating memory: %v", err)
-// }
+	"github.com/Struki84/GoMemGPT/memory"
+	"github.com/tmc/langchaingo/llms"
+)
 
-// memory.Output(func(msg llms.MessageContent) {
-// 	stream := func(ctx context.Context, chunk []byte) error {
-// 		fmt.Println(string(chunk))
-// 		return nil
-// 	}
-//
-// 	msgs = append(msgs, memory.RecallContext())
-// 	msgs = append(msgs, userMsg)
-//
-// 	response, err := llm.GenerateContent(ctx, msgs, llms.WithStreamingFunc(stream))
-// 	if err != nil {
-// 		log.Printf("Error generating response: %v", err)
-// 	}
-//
-// 	responseMsg := llms.TextParts(llms.ChatMessageTypeAI, response.Choices[0].Content)
-//
-// 	err = memory.Update(responseMsg)
-// 	if err != nil {
-// 		log.Printf("Error updating memory: %v", err)
-// 	}
-// })
+type Agent struct {
+	processor *memory.LLMProcessor
+	ready     *sync.WaitGroup
+}
 
-// 	stream := func(ctx context.Context, chunk []byte) error {
-// 		fmt.Println(string(chunk))
-// 		return nil
-// 	}
-//
-// 	response, err := llm.GenerateContent(ctx, msgs, llms.WithStreamingFunc(stream))
-// 	if err != nil {
-// 		log.Printf("Error generating response: %v", err)
-// 	}
-//
-// 	responseMsg := llms.TextParts(llms.ChatMessageTypeAI, response.Choices[0].Content)
-//
-// 	err = memory.Update(userMsg, responseMsg)
-// 	if err != nil {
-// 		log.Printf("Error updating memory: %v", err)
-// 	}
-//
-// }
+func NewAgent(ctx context.Context, llm llms.Model, storage memory.MemoryStorage) Agent {
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	mainContext := memory.NewMemoryContext(storage)
+	proc := memory.NewLLMProcessor(llm, mainContext)
+	go proc.Run(ctx, wg)
+
+	return Agent{
+		processor: proc,
+		ready:     wg,
+	}
+}
+
+func (agent *Agent) Call(input string, output func(string)) {
+	agent.ready.Wait()
+
+	agent.processor.Output(func(msg llms.MessageContent) {
+		output(msg.Parts[0].(llms.TextContent).String())
+	})
+
+	log.Printf("Calling agent with input: %s", input)
+
+	userMsg := llms.TextParts(llms.ChatMessageTypeHuman, input)
+
+	err := agent.processor.System.AppendMessage(userMsg)
+	if err != nil {
+		log.Printf("Error appending user message: %v", err)
+	}
+
+	agent.processor.Input(userMsg)
+
+	systemWarrnings := agent.processor.System.InspectMemoryPressure()
+
+	for _, systemWarrning := range systemWarrnings {
+		agent.processor.System.AppendMessage(systemWarrning)
+		agent.processor.Input(systemWarrning)
+	}
+}
