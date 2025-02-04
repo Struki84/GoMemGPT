@@ -111,11 +111,3 @@ func (db SqliteStorage) RecallWorkingContext() (string, error) {
 func (db SqliteStorage) ArchiveWorkingContext(workingContext string) error {
 	return nil
 }
-
-func (db SqliteStorage) SearchMesssgesArchives(query string) ([]llms.MessageContent, error) {
-	return []llms.MessageContent{}, nil
-}
-
-func (db SqliteStorage) SearchWorkingContextArchives(query string) ([]llms.ChatMessage, error) {
-	return []llms.ChatMessage{}, nil
-}

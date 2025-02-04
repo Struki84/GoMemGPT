@@ -93,6 +93,11 @@ func (operator MemoryOperator) Memorize(summary string) error {
 	return nil
 }
 
+//TODO:
+// add pagination to this Recall function and
+// properly handle all the arguments in both defintions
+// of functions and in the executor
+
 func (operator MemoryOperator) Recall() error {
 	msgs, err := operator.Storage.RecallMessages()
 	if err != nil {

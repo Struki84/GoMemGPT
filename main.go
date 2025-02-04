@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Struki84/GoMemGPT/memory/storage"
+	"github.com/Struki84/GoMemGPT/storage"
 	"github.com/tmc/langchaingo/llms/openai"
 )
 
@@ -17,9 +17,7 @@ func main() {
 	defer cancel()
 
 	memoryStorage := storage.NewSqliteStorage()
-	llm, err := openai.New(
-		openai.WithModel("gpt-4o"),
-	)
+	llm, err := openai.New()
 
 	if err != nil {
 		log.Printf("Error initializing LLM: %v", err)

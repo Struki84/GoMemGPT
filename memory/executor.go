@@ -79,19 +79,21 @@ var functions = []llms.Tool{
 	},
 }
 
+// Execute processor instructions based on the llm function selection
+// and preforms operations on the memory context
 type Executor struct {
 	operator  MemoryOperator
 	functions []llms.Tool
 }
 
 func NewExecutor(mainContext *MemoryContext) Executor {
-
 	return Executor{
 		operator:  *NewMemoryOperator(mainContext),
 		functions: functions,
 	}
 }
 
+// Run the llm functions
 func (executor *Executor) Run(fn llms.ToolCall) (string, error) {
 	switch fn.FunctionCall.Name {
 	case "Load":

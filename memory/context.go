@@ -21,11 +21,8 @@ type MemoryStorage interface {
 	LoadWorkingContext() (string, error)
 	SaveWorkingContext(workingContext string) error
 
-	RecallMessages() ([]llms.MessageContent, error)
+	RecallMessages(query string, limit, offset int) ([]llms.MessageContent, error)
 	ArchiveMessages(messages []llms.MessageContent) error
-
-	RecallWorkingContext() (string, error)
-	ArchiveWorkingContext(workingContext string) error
 }
 
 // Main memory context
