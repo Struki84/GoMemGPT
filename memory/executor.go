@@ -1,6 +1,8 @@
 package memory
 
 import (
+	"encoding/json"
+
 	"github.com/tmc/langchaingo/llms"
 )
 
@@ -9,7 +11,7 @@ var functions = []llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
 			Name:        "Load",
-			Description: "MemoryContext.Load() will load the last saved state of the memory context into current memory context state.",
+			Description: "MemoryContext.Load() will load your short term memory context from presistance db.",
 			Parameters:  map[string]any{},
 		},
 	},
@@ -17,7 +19,7 @@ var functions = []llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
 			Name:        "Save",
-			Description: "MemoryContext.Save() will save the current state of the memory context into presistance db.",
+			Description: "MemoryContext.Save() will save your short term memory context into presistance db.",
 			Parameters:  map[string]any{},
 		},
 	},
@@ -25,13 +27,13 @@ var functions = []llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
 			Name:        "Memorize",
-			Description: "MemoryContext.Memorize() will save the current state of the memory context into archive db and clear the overflushed messages and chat history. The input should be the updated summary of the full conversation between human and AI.",
+			Description: "Memorize will save the current messages into your long term memory, clear the messages from your short term memory leaving the last 3 messages, and updated the short term memory working context with the summary of evicted messages.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"summary": map[string]any{
 						"type":        "string",
-						"description": "This should be the updated summary of the full conversation between human and AI.",
+						"description": "Summary of all the messages in your current short term memory.",
 					},
 				},
 			},
@@ -41,13 +43,13 @@ var functions = []llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
 			Name:        "Reflect",
-			Description: "MemoryContext.Reflect() will save the historical context to archive db and clear the overflushed messages and chat history. The input should be the updated summary of all the internal messages and the conversation between human and AI.",
+			Description: "Reflect will save and summarize vital information from the messages in your short term memory or recovered from long term memory and save it into your short term memory working context.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"summary": map[string]any{
 						"type":        "string",
-						"description": "This should be the updated summary of the internal messages and conversation between human and AI.",
+						"description": "Summary of vital information found in current short term messages or messages retreived from ling term memory.",
 					},
 				},
 			},
@@ -57,24 +59,56 @@ var functions = []llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
 			Name:        "Recall",
-			Description: "MemoryContext.Recall() uses similarity search to recall information relevany to the current context from archive db.",
-			Parameters:  map[string]any{},
+			Description: "Recall will fetch a history of your previous conversations with the user and loaded in to a single messages added to your short term context, if the recalled messages overflow your short term memory context you will receive a warrning.",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"query": map[string]any{
+						"type":        "string",
+						"description": "Query to search for previous conversations.",
+					},
+					"limit": map[string]any{
+						"type":        "number",
+						"description": "Number of messages to recall per page.",
+					},
+					"page": map[string]any{
+						"type":        "number",
+						"description": "Page number to recall.",
+					},
+				},
+			},
 		},
 	},
 	{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
 			Name:        "InternalOutput",
-			Description: "",
-			Parameters:  map[string]any{},
+			Description: "InternalOutput will end function execution cycle and store the final message into your short term memory context without displaying to the user.",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"finalOutput": map[string]any{
+						"type":        "string",
+						"description": "Message to store into your short term memory context without displaying to the user.",
+					},
+				},
+			},
 		},
 	},
 	{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
 			Name:        "ExternalOutput",
-			Description: "",
-			Parameters:  map[string]any{},
+			Description: "ExternalOutput will end function execution cycle and store the final message into your short term memory context and display that message the user.",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"finalOutput": map[string]any{
+						"type":        "string",
+						"description": "Message to store into your short term memory context and display to the user.",
+					},
+				},
+			},
 		},
 	},
 }
@@ -111,30 +145,72 @@ func (executor *Executor) Run(fn llms.ToolCall) (string, error) {
 
 		return "Memory context saved", nil
 	case "Memorize":
-		err := executor.operator.Memorize(fn.FunctionCall.Arguments)
+		var args struct {
+			Summary string `json:"summary"`
+		}
+
+		if err := json.Unmarshal([]byte(fn.FunctionCall.Arguments), &args); err != nil {
+			return "Error unmarshalling Memorize arguments", err
+		}
+
+		err := executor.operator.Memorize(args.Summary)
 		if err != nil {
 			return "", err
 		}
 
 		return "Memory context memorized", nil
 	case "Reflect":
-		err := executor.operator.Reflect(fn.FunctionCall.Arguments)
+		var args struct {
+			Summary string `json:"summary"`
+		}
+
+		if err := json.Unmarshal([]byte(fn.FunctionCall.Arguments), &args); err != nil {
+			return "Error unmarshalling Reflect arguments", err
+		}
+
+		err := executor.operator.Reflect(args.Summary)
 		if err != nil {
 			return "", err
 		}
 
 		return "Memory context reflected", nil
 	case "Recall":
-		err := executor.operator.Recall()
+		var args struct {
+			Query string `json:"query"`
+			Limit int    `json:"limit"`
+			Page  int    `json:"page"`
+		}
+
+		if err := json.Unmarshal([]byte(fn.FunctionCall.Arguments), &args); err != nil {
+			return "Error unmarshalling Recall arguments", err
+		}
+
+		err := executor.operator.Recall(args.Query, args.Limit, args.Page)
 		if err != nil {
 			return "", err
 		}
 
-		return "Memory context recalled", nil
+		return "Conversation history recalled", nil
 	case "InternalOutput":
-		return executor.operator.InternalOutput(fn.FunctionCall.Arguments), nil
+		var args struct {
+			FinalOutput string `json:"finalOutput"`
+		}
+
+		if err := json.Unmarshal([]byte(fn.FunctionCall.Arguments), &args); err != nil {
+			return "Error unmarshalling InternalOutput arguments", err
+		}
+
+		return executor.operator.InternalOutput(args.FinalOutput), nil
 	case "ExternalOutput":
-		return executor.operator.ExternalOutput(fn.FunctionCall.Arguments), nil
+		var args struct {
+			FinalOutput string `json:"finalOutput"`
+		}
+
+		if err := json.Unmarshal([]byte(fn.FunctionCall.Arguments), &args); err != nil {
+			return "Error unmarshalling ExternalOutput arguments", err
+		}
+
+		return executor.operator.ExternalOutput(args.FinalOutput), nil
 	}
 
 	return "", nil

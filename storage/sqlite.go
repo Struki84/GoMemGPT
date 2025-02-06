@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"errors"
 	"log"
 
 	"github.com/tmc/langchaingo/llms"
@@ -108,29 +109,34 @@ func (db SqliteStorage) SaveWorkingContext(workingContext string) error {
 	return query.Update("context", workingContext).Error
 }
 
-func (db SqliteStorage) RecallMessages(search string, limit, offset int) ([]llms.MessageContent, error) {
+func (db SqliteStorage) RecallMessages(search string, limit, offset int) (string, error) {
 	var memory Memory
 	err := db.DB.Where("session_id = ?", db.sessionID).First(&memory).Error
 	if err != nil {
-		return []llms.MessageContent{}, err
+		return "", err
 	}
 
 	var msgs []Message
 
-	query := db.DB.Where("memory_id = ? AND status = ?", memory.ID, archived)
+	query := db.DB.Where("memory_id = ? AND status = ? AND (role = ? OR role = ?)", memory.ID, archived, "human", "ai")
 	query.Where("content LIKE ?", "%"+search+"%")
 	query.Order("created_at DESC")
 	query.Limit(limit).Offset(offset)
 
 	err = query.Find(&msgs).Error
 	if err != nil {
-		return []llms.MessageContent{}, err
+		return "", err
 	}
 
-	var results []llms.MessageContent
+	if len(msgs) == 0 {
+		return "", errors.New("no messages found")
+	}
+
+	var results string
 	for _, msg := range msgs {
-		var msgType llms.ChatMessageType = llms.ChatMessageType(msg.Role)
-		results = append(results, llms.TextParts(msgType, msg.Content))
+		timestamp := msg.CreatedAt.Format("2006-01-02 15:04:05")
+		role := msg.Role
+		results += timestamp + ": " + role + " - " + msg.Content + "\n"
 	}
 
 	return results, nil

@@ -1,5 +1,14 @@
 package memory
 
+import (
+	"errors"
+	"fmt"
+	"log"
+
+	"github.com/pkoukk/tiktoken-go"
+	"github.com/tmc/langchaingo/llms"
+)
+
 type MemoryOperator struct {
 	MainContext *MemoryContext
 	Storage     MemoryStorage
@@ -93,20 +102,28 @@ func (operator MemoryOperator) Memorize(summary string) error {
 	return nil
 }
 
-//TODO:
-// add pagination to this Recall function and
-// properly handle all the arguments in both defintions
-// of functions and in the executor
-
-func (operator MemoryOperator) Recall() error {
-	msgs, err := operator.Storage.RecallMessages()
+func (operator MemoryOperator) Recall(query string, limit, page int) error {
+	msgs, err := operator.Storage.RecallMessages(query, limit, page)
 	if err != nil {
 		return err
 	}
 
-	operator.MainContext.Messages = msgs
+	encoder, err := tiktoken.GetEncoding("cl100k_base")
+	if err != nil {
+		log.Printf("Error creating tiktoken encoder: %v", err)
+		return errors.New(fmt.Sprintf("error creating tiktoken encoder: %v", err))
+	}
 
-	return nil
+	msgSize := len(encoder.Encode(msgs, nil, nil))
+
+	if operator.MainContext.CurrentMessagesSize()+msgSize < int(operator.MainContext.msgsSize*0.9) {
+		chatHistory := llms.TextParts(llms.ChatMessageTypeSystem, msgs)
+		operator.MainContext.Messages = append(operator.MainContext.Messages, chatHistory)
+
+		return nil
+	}
+
+	return errors.New("memory overflow: request less messages per page or clear your memory")
 }
 
 func (operator MemoryOperator) InternalOutput(msg string) string {

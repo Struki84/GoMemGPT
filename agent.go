@@ -46,11 +46,5 @@ func (agent *Agent) Call(input string, output func(string)) {
 	}
 
 	agent.processor.Input(userMsg)
-
-	systemWarrnings := agent.processor.System.InspectMemoryPressure()
-
-	for _, systemWarrning := range systemWarrnings {
-		agent.processor.System.AppendMessage(systemWarrning)
-		agent.processor.Input(systemWarrning)
-	}
+	agent.processor.CheckMemoryPressure()
 }

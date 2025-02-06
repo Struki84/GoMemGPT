@@ -66,11 +66,13 @@ func (processor *LLMProcessor) handleMessage(ctx context.Context, msg llms.Messa
 				if toolCall.FunctionCall.Name == "InternalOutput" {
 					newMsg := llms.TextParts(llms.ChatMessageTypeAI, msg.Parts[0].(llms.TextContent).String())
 					processor.System.AppendMessage(newMsg)
+					processor.CheckMemoryPressure()
 				}
 
 				if toolCall.FunctionCall.Name == "ExternalOutput" {
 					newMsg := llms.TextParts(llms.ChatMessageTypeAI, msg.Parts[0].(llms.TextContent).String())
 					processor.System.AppendMessage(newMsg)
+					processor.CheckMemoryPressure()
 					processor.mainProc <- newMsg
 				}
 			}
@@ -112,12 +114,16 @@ func (processor *LLMProcessor) handleMessage(ctx context.Context, msg llms.Messa
 					newMsg.Parts = append(newMsg.Parts, toolCall)
 
 					processor.System.AppendMessage(newMsg)
+					processor.CheckMemoryPressure()
+
 					processor.mainProc <- newMsg
 				} else {
 					newMsg := llms.TextParts(llms.ChatMessageTypeFunction, executionResult)
 					newMsg.Parts = append(newMsg.Parts, toolCall)
 
 					processor.System.AppendMessage(newMsg)
+					processor.CheckMemoryPressure()
+
 					processor.mainProc <- newMsg
 				}
 			}
@@ -142,4 +148,13 @@ func (processor *LLMProcessor) callLLM(ctx context.Context) {
 
 	processor.System.AppendMessage(newMsg)
 	processor.mainProc <- newMsg
+}
+
+func (processor *LLMProcessor) CheckMemoryPressure() {
+	systemWarrnings := processor.System.InspectMemoryPressure()
+
+	for _, systemWarrning := range systemWarrnings {
+		processor.System.AppendMessage(systemWarrning)
+		processor.Input(systemWarrning)
+	}
 }

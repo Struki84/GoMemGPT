@@ -1,3 +1,7 @@
+// TODO:
+// - finish functions definitions
+// - add primer sys prompt
+
 package main
 
 import (
