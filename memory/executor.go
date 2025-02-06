@@ -99,7 +99,7 @@ var functions = []llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
 			Name:        "ExternalOutput",
-			Description: "ExternalOutput will end function execution cycle and store the final message into your short term memory context and display that message the user.",
+			Description: "ExternalOutput will end function execution cycle and store the final message into your short term memory context and display that message to the user.",
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{

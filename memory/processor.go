@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/Struki84/GoMemGPT/logger"
 	"github.com/tmc/langchaingo/llms"
 )
 
@@ -56,6 +57,8 @@ func (processor *LLMProcessor) Run(ctx context.Context, wg *sync.WaitGroup) {
 
 func (processor *LLMProcessor) handleMessage(ctx context.Context, msg llms.MessageContent) {
 
+	logger.LogLastMessage(processor.System.mainContext.Messages)
+
 	switch msg.Role {
 	case llms.ChatMessageTypeSystem, llms.ChatMessageTypeHuman:
 		processor.callLLM(ctx)
@@ -77,36 +80,15 @@ func (processor *LLMProcessor) handleMessage(ctx context.Context, msg llms.Messa
 				}
 			}
 		}
-
-		// output := false
-		//
-		// for _, part := range msg.Parts {
-		// 	if toolCall, ok := part.(llms.ToolCall); ok {
-		// 		if toolCall.FunctionCall.Name == "InternalOutput" {
-		// 			output = true
-		// 			newMsg := llms.TextParts(llms.ChatMessageTypeAI, msg.Parts[0].(llms.TextContent).String())
-		// 			processor.system.AppendMessage(newMsg)
-		// 		}
-		//
-		// 		if toolCall.FunctionCall.Name == "ExternalOutput" {
-		// 			output = true
-		// 			newMsg := llms.TextParts(llms.ChatMessageTypeAI, msg.Parts[0].(llms.TextContent).String())
-		// 			processor.system.AppendMessage(newMsg)
-		// 			processor.output(newMsg)
-		// 		}
-		// 	}
-		// }
-		//
-		// if !output {
-		// 	processor.callLLM(ctx)
-		// }
-
 	case llms.ChatMessageTypeAI:
 		tool := false
 
 		for _, part := range msg.Parts {
 			if toolCall, ok := part.(llms.ToolCall); ok {
 				tool = true
+
+				fmt.Printf("executing function: %s, with arguments: %v \n", toolCall.FunctionCall.Name, toolCall.FunctionCall.Arguments)
+
 				executionResult, err := processor.executor.Run(toolCall)
 
 				if err != nil {
@@ -136,14 +118,22 @@ func (processor *LLMProcessor) handleMessage(ctx context.Context, msg llms.Messa
 }
 
 func (processor *LLMProcessor) callLLM(ctx context.Context) {
-	response, _ := processor.llm.GenerateContent(ctx, processor.System.mainContext.Messages,
+	response, err := processor.llm.GenerateContent(ctx, processor.System.mainContext.Messages,
 		llms.WithTools(processor.executor.functions),
 	)
 
+	if err != nil {
+		log.Printf("Error generating response: %v", err)
+		return
+	}
+
 	newMsg := llms.TextParts(llms.ChatMessageTypeAI, response.Choices[0].Content)
 
-	for _, toolCall := range response.Choices[0].ToolCalls {
-		newMsg.Parts = append(newMsg.Parts, toolCall)
+	if len(response.Choices[0].ToolCalls) > 0 {
+		newMsg = llms.TextParts(llms.ChatMessageTypeAI, "preforming function calls")
+		for _, toolCall := range response.Choices[0].ToolCalls {
+			newMsg.Parts = append(newMsg.Parts, toolCall)
+		}
 	}
 
 	processor.System.AppendMessage(newMsg)

@@ -17,7 +17,7 @@ type SqliteStorage struct {
 
 func NewSqliteStorage() SqliteStorage {
 	storage := SqliteStorage{}
-	dbPath := "./memory.db"
+	dbPath := "./storage/memory.db"
 
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {

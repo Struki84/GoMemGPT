@@ -140,6 +140,10 @@ func (system *SystemMonitor) AppendMessage(msg llms.MessageContent) error {
 
 	primerMsg := llms.TextParts(llms.ChatMessageTypeSystem, primerPrompt)
 
+	if len(system.mainContext.Messages) == 0 {
+		system.mainContext.Messages = append(system.mainContext.Messages, primerMsg)
+	}
+
 	system.mainContext.Messages[0] = primerMsg
 	system.mainContext.Messages = append(system.mainContext.Messages, msg)
 

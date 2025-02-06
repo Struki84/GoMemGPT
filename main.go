@@ -21,7 +21,7 @@ func main() {
 	defer cancel()
 
 	memoryStorage := storage.NewSqliteStorage()
-	llm, err := openai.New()
+	llm, err := openai.New(openai.WithModel("gpt-4o"))
 
 	if err != nil {
 		log.Printf("Error initializing LLM: %v", err)

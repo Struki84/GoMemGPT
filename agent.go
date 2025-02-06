@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 
@@ -36,7 +37,8 @@ func (agent *Agent) Call(input string, output func(string)) {
 		output(msg.Parts[0].(llms.TextContent).String())
 	})
 
-	log.Printf("Calling agent with input: %s", input)
+	// log.Printf("Calling agent with input: %s", input)
+	fmt.Println("<<<< Internal Messages >>>>")
 
 	userMsg := llms.TextParts(llms.ChatMessageTypeHuman, input)
 
