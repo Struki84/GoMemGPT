@@ -126,6 +126,10 @@ func (operator MemoryOperator) Recall(query string, limit, page int) error {
 	return errors.New("memory overflow: request less messages per page or clear your memory")
 }
 
+func (operator MemoryOperator) Think(thought string) string {
+	return thought
+}
+
 func (operator MemoryOperator) InternalOutput(msg string) string {
 	return msg
 }

@@ -82,6 +82,22 @@ var functions = []llms.Tool{
 	{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
+			Name:        "Think",
+			Description: "Think allows you to messages your self and thus enables you to reason about your actions and decisions, you can call think multiple times.",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"thought": map[string]any{
+						"type":        "string",
+						"description": "Internal message to your self.",
+					},
+				},
+			},
+		},
+	},
+	{
+		Type: "function",
+		Function: &llms.FunctionDefinition{
 			Name:        "InternalOutput",
 			Description: "InternalOutput will end function execution cycle and store the final message into your short term memory context without displaying to the user.",
 			Parameters: map[string]any{
@@ -191,6 +207,16 @@ func (executor *Executor) Run(fn llms.ToolCall) (string, error) {
 		}
 
 		return "Conversation history recalled", nil
+	case "Think":
+		var args struct {
+			Thought string `json:"thought"`
+		}
+
+		if err := json.Unmarshal([]byte(fn.FunctionCall.Arguments), &args); err != nil {
+			return "Error unmarshalling Think arguments", err
+		}
+
+		return executor.operator.Think(args.Thought), nil
 	case "InternalOutput":
 		var args struct {
 			FinalOutput string `json:"finalOutput"`

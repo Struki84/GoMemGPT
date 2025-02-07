@@ -10,6 +10,10 @@ import (
 	"github.com/tmc/langchaingo/llms"
 )
 
+type step struct {
+	msg llms.MessageContent
+}
+
 type LLMProcessor struct {
 	llm      llms.Model
 	System   *SystemMonitor
@@ -56,29 +60,38 @@ func (processor *LLMProcessor) Run(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 func (processor *LLMProcessor) handleMessage(ctx context.Context, msg llms.MessageContent) {
-
 	logger.LogLastMessage(processor.System.mainContext.Messages)
 
 	switch msg.Role {
-	case llms.ChatMessageTypeSystem, llms.ChatMessageTypeHuman:
+	case llms.ChatMessageTypeHuman:
 		processor.callLLM(ctx)
-	case llms.ChatMessageTypeFunction:
-		// alt version
+	case llms.ChatMessageTypeSystem:
+		processor.System.AppendMessage(msg)
+		processor.callLLM(ctx)
+	case llms.ChatMessageTypeTool:
+		output := false
+
 		for _, part := range msg.Parts {
-			if toolCall, ok := part.(llms.ToolCall); ok {
-				if toolCall.FunctionCall.Name == "InternalOutput" {
-					newMsg := llms.TextParts(llms.ChatMessageTypeAI, msg.Parts[0].(llms.TextContent).String())
+			if toolResponse, ok := part.(llms.ToolCallResponse); ok {
+				if toolResponse.Name == "InternalOutput" {
+					output = true
+					newMsg := llms.TextParts(llms.ChatMessageTypeAI, toolResponse.Content)
 					processor.System.AppendMessage(newMsg)
 					processor.CheckMemoryPressure()
 				}
 
-				if toolCall.FunctionCall.Name == "ExternalOutput" {
-					newMsg := llms.TextParts(llms.ChatMessageTypeAI, msg.Parts[0].(llms.TextContent).String())
+				if toolResponse.Name == "ExternalOutput" {
+					output = true
+					newMsg := llms.TextParts(llms.ChatMessageTypeAI, toolResponse.Content)
 					processor.System.AppendMessage(newMsg)
 					processor.CheckMemoryPressure()
 					processor.mainProc <- newMsg
 				}
 			}
+		}
+
+		if !output {
+			processor.callLLM(ctx)
 		}
 	case llms.ChatMessageTypeAI:
 		tool := false
@@ -87,37 +100,38 @@ func (processor *LLMProcessor) handleMessage(ctx context.Context, msg llms.Messa
 			if toolCall, ok := part.(llms.ToolCall); ok {
 				tool = true
 
-				fmt.Printf("executing function: %s, with arguments: %v \n", toolCall.FunctionCall.Name, toolCall.FunctionCall.Arguments)
-
 				executionResult, err := processor.executor.Run(toolCall)
-
 				if err != nil {
-					newMsg := llms.TextParts(llms.ChatMessageTypeFunction, fmt.Sprintf("Error running function: %v", err))
-					newMsg.Parts = append(newMsg.Parts, toolCall)
-
-					processor.System.AppendMessage(newMsg)
-					processor.CheckMemoryPressure()
-
-					processor.mainProc <- newMsg
-				} else {
-					newMsg := llms.TextParts(llms.ChatMessageTypeFunction, executionResult)
-					newMsg.Parts = append(newMsg.Parts, toolCall)
-
-					processor.System.AppendMessage(newMsg)
-					processor.CheckMemoryPressure()
-
-					processor.mainProc <- newMsg
+					executionResult = fmt.Sprintf("Error running function: %v", err)
 				}
+
+				newMsg := llms.MessageContent{
+					Role: llms.ChatMessageTypeTool,
+					Parts: []llms.ContentPart{
+						llms.ToolCallResponse{
+							ToolCallID: toolCall.ID,
+							Name:       toolCall.FunctionCall.Name,
+							Content:    executionResult,
+						},
+					},
+				}
+
+				processor.System.AppendMessage(newMsg)
+				processor.CheckMemoryPressure()
+
+				processor.mainProc <- newMsg
 			}
 		}
 
 		if !tool && processor.output != nil {
 			processor.output(msg)
 		}
+
 	}
 }
 
 func (processor *LLMProcessor) callLLM(ctx context.Context) {
+	// log.Println(processor.System.mainContext.Messages)
 	response, err := processor.llm.GenerateContent(ctx, processor.System.mainContext.Messages,
 		llms.WithTools(processor.executor.functions),
 	)
@@ -144,7 +158,6 @@ func (processor *LLMProcessor) CheckMemoryPressure() {
 	systemWarrnings := processor.System.InspectMemoryPressure()
 
 	for _, systemWarrning := range systemWarrnings {
-		processor.System.AppendMessage(systemWarrning)
 		processor.Input(systemWarrning)
 	}
 }

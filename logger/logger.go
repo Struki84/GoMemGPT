@@ -18,5 +18,11 @@ func LogMesages(messages []llms.MessageContent) {
 
 func LogLastMessage(messages []llms.MessageContent) {
 	lastMessage := messages[len(messages)-1]
-	fmt.Println(fmt.Sprintf("%s: %s", lastMessage.Role, lastMessage.Parts[0].(llms.TextContent).String()))
+
+	if toolResponse, ok := lastMessage.Parts[0].(llms.ToolCallResponse); ok {
+		fmt.Println(fmt.Sprintf("%s: %s", lastMessage.Role, toolResponse.Content))
+	} else {
+		fmt.Println(fmt.Sprintf("%s: %s", lastMessage.Role, lastMessage.Parts[0].(llms.TextContent).String()))
+	}
+
 }
