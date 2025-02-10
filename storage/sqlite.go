@@ -17,7 +17,7 @@ type SqliteStorage struct {
 
 func NewSqliteStorage() SqliteStorage {
 	storage := SqliteStorage{}
-	dbPath := "./memory.db"
+	dbPath := "./storage/memory.db"
 
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
@@ -161,5 +161,5 @@ func (db SqliteStorage) ArchiveMessages(messages []llms.MessageContent) error {
 		})
 	}
 
-	return db.DB.Where("memory_id = ?", memory.ID).Delete(&archivedMsgs).Error
+	return db.DB.Where("memory_id = ?", memory.ID).Save(&archivedMsgs).Error
 }

@@ -1,0 +1,6 @@
+On user input assistant should
+- first think what to do
+- decide if he needs to reflect on the conversation and extract information important for the current conversation
+- decided if he needs to refrexh short term memory (load the conversation int memoru context from the db)
+- based on the user input search his archived conversations
+- be able to initiate message archiving when system warrnign is triggered
