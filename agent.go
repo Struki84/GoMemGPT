@@ -22,6 +22,7 @@ func NewAgent(ctx context.Context, llm llms.Model, storage memory.MemoryStorage)
 
 	mainContext := memory.NewMemoryContext(storage)
 	proc := memory.NewLLMProcessor(llm, mainContext)
+
 	go proc.Run(ctx, wg)
 
 	return Agent{

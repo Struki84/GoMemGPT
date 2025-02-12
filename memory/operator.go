@@ -17,6 +17,7 @@ type MemoryOperator struct {
 func NewMemoryOperator(mainContext *MemoryContext) *MemoryOperator {
 	return &MemoryOperator{
 		MainContext: mainContext,
+		Storage:     mainContext.Storage,
 	}
 }
 
@@ -33,6 +34,8 @@ func (operator MemoryOperator) Load() error {
 
 	operator.MainContext.Messages = msgs
 	operator.MainContext.WorkingContext = workingContext
+
+	log.Printf("Messages loaded: %v", operator.MainContext.Messages)
 
 	return nil
 }
@@ -78,26 +81,41 @@ func (operator MemoryOperator) Memorize(summary string) error {
 	// we flush all the messages from shrot term memory and leave only the last 3
 	// the evicted messages are appended to long term memory
 	// this is probably a temp solution
-	clanedMsgs := operator.MainContext.Messages[max(0, len(operator.MainContext.Messages)-3):]
+	// clanedMsgs := operator.MainContext.Messages[max(0, len(operator.MainContext.Messages)-3):]
+
+	// err = operator.Storage.SaveMessages(clanedMsgs)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// operator.MainContext.Messages = clanedMsgs
 
 	err := operator.Storage.ArchiveMessages(operator.MainContext.Messages)
 	if err != nil {
+		log.Printf("Error archiving messages: %v", err)
 		return err
 	}
-
-	err = operator.Storage.SaveMessages(clanedMsgs)
-	if err != nil {
-		return err
-	}
-
-	operator.MainContext.Messages = clanedMsgs
 
 	err = operator.Storage.SaveWorkingContext(summary)
 	if err != nil {
+		log.Printf("Error saving working context: %v", err)
 		return err
 	}
 
-	operator.MainContext.WorkingContext = summary
+	msgs, err := operator.Storage.LoadMessages()
+	if err != nil {
+		log.Printf("Error loading messages: %v", err)
+		return err
+	}
+
+	workingCtx, err := operator.Storage.LoadWorkingContext()
+	if err != nil {
+		log.Printf("Error loading working context: %v", err)
+		return err
+	}
+
+	operator.MainContext.Messages = msgs
+	operator.MainContext.WorkingContext = workingCtx
 
 	return nil
 }
@@ -123,7 +141,7 @@ func (operator MemoryOperator) Recall(query string, limit, page int) error {
 		return nil
 	}
 
-	return errors.New("memory overflow: request less messages per page or clear your memory")
+	return errors.New("Memory overflow: request less messages per page or clear your memory")
 }
 
 func (operator MemoryOperator) Think(thought string) string {

@@ -141,10 +141,15 @@ func (system *SystemMonitor) AppendMessage(msg llms.MessageContent) error {
 	primerMsg := llms.TextParts(llms.ChatMessageTypeSystem, primerPrompt)
 
 	if len(system.mainContext.Messages) == 0 {
-		system.mainContext.Messages = append(system.mainContext.Messages, primerMsg)
+		system.mainContext.Messages = []llms.MessageContent{primerMsg}
+	} else {
+		if system.mainContext.Messages[0].Role == llms.ChatMessageTypeSystem {
+			system.mainContext.Messages[0] = primerMsg
+		} else {
+			system.mainContext.Messages = append([]llms.MessageContent{primerMsg}, system.mainContext.Messages...)
+		}
 	}
 
-	system.mainContext.Messages[0] = primerMsg
 	system.mainContext.Messages = append(system.mainContext.Messages, msg)
 
 	return nil

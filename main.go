@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/Struki84/GoMemGPT/storage"
+	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/openai"
 )
 
@@ -32,6 +33,29 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	fmt.Println("Type a message (or 'exit' to quit): ")
+
+	msgsHistory, err := memoryStorage.LoadMessages()
+
+	// log.Println("Loaded messages:", len(msgsHistory))
+
+	if len(msgsHistory) > 0 {
+
+		// msgsHistory = msgsHistory[1:]
+
+		for _, msg := range msgsHistory {
+
+			role := ""
+			if msg.Role == "human" {
+				role = "Input: >"
+			} else {
+				role = "Output: >"
+			}
+
+			if msg.Parts[0].(llms.TextContent).Text != "preforming function calls" {
+				fmt.Println(fmt.Sprintf("%s %s", role, msg.Parts[0].(llms.TextContent).Text))
+			}
+		}
+	}
 
 	for {
 		fmt.Printf("Input: > ")

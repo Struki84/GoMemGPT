@@ -24,6 +24,12 @@ type LLMProcessor struct {
 
 func NewLLMProcessor(llm llms.Model, mainContext *MemoryContext) *LLMProcessor {
 
+	exec := NewExecutor(mainContext)
+
+	// load chat history.
+	// tmp solution since I don't like it this way
+	exec.operator.Load()
+
 	return &LLMProcessor{
 		llm:      llm,
 		System:   NewSystemMonitor(mainContext),
@@ -131,7 +137,7 @@ func (processor *LLMProcessor) handleMessage(ctx context.Context, msg llms.Messa
 }
 
 func (processor *LLMProcessor) callLLM(ctx context.Context) {
-	// log.Println(processor.System.mainContext.Messages)
+	log.Println(processor.System.mainContext.Messages)
 	response, err := processor.llm.GenerateContent(ctx, processor.System.mainContext.Messages,
 		llms.WithTools(processor.executor.functions),
 	)
