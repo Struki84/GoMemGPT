@@ -20,25 +20,12 @@ var (
 	{{.workingContext}}
 	`
 
-	primerMemoryTemplate = `
-	{{.time}}
-	
-	You are an intelligent memory manager. 
-
-	Your brief history is as follows:
-	{{.historicalContext}}
-
-	Your current context is as follows:
-	{{.currentContext}}
-
-	Your conversation history with the user is as follows:
-	{{.messages}
-	`
-
 	memoryPressureWorkingContext = `
 	{{.time}}
 	
 	Memory pressure warning: WorkingContext
+
+	Rewrite your working context so it takes up less space.
 
 	Working context size: {{.workingContextSize}}
 	`
@@ -47,6 +34,8 @@ var (
 	{{.time}}
 	
 	Memory pressure warning: Messages
+
+	Move messages from your short term memory context to your long term memory context and save a sumary of your messages to your short term memory working context.
 	
 	Messages size: {{.messagesSize}}
 	`
@@ -65,7 +54,6 @@ func NewSystemMonitor(mainContext *MemoryContext) *SystemMonitor {
 	return &SystemMonitor{
 		mainContext: mainContext,
 		Instructions: map[string]string{
-			"primer:MemoryTemplate":         primerMemoryTemplate,
 			"primer:assistantTemplate":      primerAssistantTemplate,
 			"memoryPressure:WorkingContext": memoryPressureWorkingContext,
 			"memoryPressure:Messages":       memoryPressureMessages,
@@ -127,7 +115,7 @@ func (system *SystemMonitor) InspectMemoryPressure() []llms.MessageContent {
 
 func (system *SystemMonitor) AppendMessage(msg llms.MessageContent) error {
 	primerPrompt, err := system.Instruction("primer:assistantTemplate", map[string]any{
-		"time":           time.Now().Format("January 02, 2006"),
+		"time":           time.Now().Format("January 02, 2006, 15:04:05"),
 		"workingContext": system.mainContext.WorkingContext,
 	})
 

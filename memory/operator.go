@@ -35,7 +35,7 @@ func (operator MemoryOperator) Load() error {
 	operator.MainContext.Messages = msgs
 	operator.MainContext.WorkingContext = workingContext
 
-	log.Printf("Messages loaded: %v", operator.MainContext.Messages)
+	// log.Printf("Messages loaded: %v", operator.MainContext.Messages)
 
 	return nil
 }

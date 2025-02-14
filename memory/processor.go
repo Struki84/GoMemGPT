@@ -33,7 +33,7 @@ func NewLLMProcessor(llm llms.Model, mainContext *MemoryContext) *LLMProcessor {
 	return &LLMProcessor{
 		llm:      llm,
 		System:   NewSystemMonitor(mainContext),
-		executor: NewExecutor(mainContext),
+		executor: exec,
 		mainProc: make(chan llms.MessageContent, 100),
 	}
 }
@@ -137,7 +137,7 @@ func (processor *LLMProcessor) handleMessage(ctx context.Context, msg llms.Messa
 }
 
 func (processor *LLMProcessor) callLLM(ctx context.Context) {
-	log.Println(processor.System.mainContext.Messages)
+	// log.Println(processor.System.mainContext.Messages)
 	response, err := processor.llm.GenerateContent(ctx, processor.System.mainContext.Messages,
 		llms.WithTools(processor.executor.functions),
 	)

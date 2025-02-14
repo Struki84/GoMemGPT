@@ -55,7 +55,7 @@ func (db SqliteStorage) LoadMessages() ([]llms.MessageContent, error) {
 
 	var msgs []Message
 	query := db.DB.Where("memory_id = ? AND status = ?", memory.ID, current)
-	query.Order("created_at DESC")
+	query.Order("created_at ASC")
 
 	err = query.Find(&msgs).Error
 	if err != nil {
@@ -105,7 +105,6 @@ func (db SqliteStorage) SaveMessages(messages []llms.MessageContent) error {
 
 		if msg.Role == llms.ChatMessageTypeTool {
 			msgContent = msg.Parts[0].(llms.ToolCallResponse).Content
-			log.Printf("tool / function response")
 		} else {
 			msgContent = msg.Parts[0].(llms.TextContent).String()
 		}
@@ -158,7 +157,7 @@ func (db SqliteStorage) RecallMessages(search string, limit, offset int) (string
 
 	query := db.DB.Where("memory_id = ? AND status = ? AND (role = ? OR role = ?)", memory.ID, archived, "human", "ai")
 	query.Where("content LIKE ?", "%"+search+"%")
-	query.Order("created_at DESC")
+	query.Order("created_at ASC")
 	query.Limit(limit).Offset(offset)
 
 	err = query.Find(&msgs).Error
@@ -188,16 +187,41 @@ func (db SqliteStorage) ArchiveMessages(messages []llms.MessageContent) error {
 		return err
 	}
 
-	archivedMsgs := []Message{}
-
-	for _, message := range messages {
-		archivedMsgs = append(archivedMsgs, Message{
-			Role:     string(message.Role),
-			Content:  message.Parts[0].(llms.TextContent).String(),
-			MemoryID: memory.ID,
-			Status:   archived,
-		})
+	var existingMsgs []Message
+	err = db.DB.Where("memory_id = ? AND status = ?", memory.ID, archived).Find(&existingMsgs).Error
+	if err != nil {
+		return err
 	}
 
-	return db.DB.Where("memory_id = ?", memory.ID).Save(&archivedMsgs).Error
+	existingMsgsSet := make(map[string]struct{})
+	for _, msg := range existingMsgs {
+		existingMsgsSet[msg.Role+msg.Content] = struct{}{}
+	}
+
+	newMsgs := []Message{}
+	for _, msg := range messages {
+		var msgContent string
+
+		if msg.Role == llms.ChatMessageTypeTool {
+			msgContent = msg.Parts[0].(llms.ToolCallResponse).Content
+		} else {
+			msgContent = msg.Parts[0].(llms.TextContent).String()
+		}
+
+		key := string(msg.Role) + msgContent
+		if _, ok := existingMsgsSet[key]; !ok {
+			newMsgs = append(newMsgs, Message{
+				Role:     string(msg.Role),
+				Content:  msgContent,
+				MemoryID: memory.ID,
+				Status:   archived,
+			})
+		}
+	}
+
+	if len(newMsgs) > 0 {
+		return db.DB.Save(&newMsgs).Error
+	}
+
+	return errors.New("no new messages to save")
 }
