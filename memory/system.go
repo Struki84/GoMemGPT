@@ -2,6 +2,7 @@ package memory
 
 import (
 	"log"
+	"os"
 	"time"
 
 	"github.com/tmc/langchaingo/llms"
@@ -51,10 +52,15 @@ type SystemMonitor struct {
 }
 
 func NewSystemMonitor(mainContext *MemoryContext) *SystemMonitor {
+	promptTemplate, err := os.ReadFile("./memory/template.txt")
+	if err != nil {
+		log.Printf("Error loading promptTemplate template: %v", err)
+	}
+
 	return &SystemMonitor{
 		mainContext: mainContext,
 		Instructions: map[string]string{
-			"primer:assistantTemplate":      primerAssistantTemplate,
+			"primer:assistantTemplate":      string(promptTemplate),
 			"memoryPressure:WorkingContext": memoryPressureWorkingContext,
 			"memoryPressure:Messages":       memoryPressureMessages,
 		},
