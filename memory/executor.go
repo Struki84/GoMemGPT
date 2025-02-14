@@ -11,7 +11,7 @@ var functions = []llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
 			Name:        "Load",
-			Description: "MemoryContext.Load() will load your short term memory context from presistance db.",
+			Description: "Load will load your short term memory context from presistance db.",
 			Parameters:  map[string]any{},
 		},
 	},
@@ -19,7 +19,7 @@ var functions = []llms.Tool{
 		Type: "function",
 		Function: &llms.FunctionDefinition{
 			Name:        "Save",
-			Description: "MemoryContext.Save() will save your short term memory context into presistance db.",
+			Description: "Save will save your short term memory context into presistance db.",
 			Parameters:  map[string]any{},
 		},
 	},
@@ -32,8 +32,8 @@ var functions = []llms.Tool{
 				"type": "object",
 				"properties": map[string]any{
 					"summary": map[string]any{
-						"type":        "string",
-						"description": "Summary of all the messages in your current short term memory.",
+						"type":          "string",
+						"descriptionhj": "Summary of all the messages in your current short term memory.",
 					},
 				},
 			},
@@ -63,7 +63,7 @@ var functions = []llms.Tool{
 			Parameters: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"query": map[string]any{
+					"search": map[string]any{
 						"type":        "string",
 						"description": "Query to search for previous conversations.",
 					},

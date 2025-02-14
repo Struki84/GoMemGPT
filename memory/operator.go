@@ -89,8 +89,13 @@ func (operator MemoryOperator) Memorize(summary string) error {
 	// }
 
 	// operator.MainContext.Messages = clanedMsgs
+	err := operator.Storage.SaveMessages(operator.MainContext.Messages)
+	if err != nil {
+		log.Printf("Error saving messages: %v", err)
+		return err
+	}
 
-	err := operator.Storage.ArchiveMessages(operator.MainContext.Messages)
+	err = operator.Storage.ArchiveMessages(operator.MainContext.Messages)
 	if err != nil {
 		log.Printf("Error archiving messages: %v", err)
 		return err

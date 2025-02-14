@@ -77,6 +77,8 @@ Summary of all the messages you have moved to the long term memory. Historical c
 Long Term Memory(infinite size):
 Your long term memory is infinite size, but is held outside of your immediate context, so you must explicitly run a Recall function to see data inside it. On recall you will receive a single message containg previous messages.
 
+You can write to your long term memory using Memorize function, which will trasnfer all
+
 </BASE INSTRUCTIONS>
 
 <WORKING CONTEXT>
